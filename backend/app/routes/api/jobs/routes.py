@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from flask import Blueprint, render_template, jsonify, request, abort
 
-from app.services.embeddings import embed_text, MODEL_NAME
+from services.embeddings import embed_text, MODEL_NAME
 
 jobs_bp = Blueprint('jobs', __name__)
 
