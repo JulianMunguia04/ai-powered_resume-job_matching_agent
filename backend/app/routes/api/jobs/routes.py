@@ -14,7 +14,9 @@ jobs = {}
 # GET /jobs Returns all jobs
 @jobs_bp.route('/', methods=['GET'])
 def get_all_jobs():
-  return jsonify({"jobs": list(jobs.values())}), 200
+    return jsonify({
+        "jobs": [public_job(job) for job in jobs.values()]
+    }), 200
 
 # POST /jobs Validate and create a job
 @jobs_bp.route('/', methods=['POST'])
@@ -78,4 +80,15 @@ def get_job(job_id):
             "error": "Job not found."
         }), 404
 
-    return jsonify({"job": job}), 200
+    return jsonify({"job": public_job(job)}), 200
+
+# Helper Functions
+
+def public_job(job):
+    return {
+        "id": job["id"],
+        "title": job["title"],
+        "description": job["description"],
+        "embedding_model": job["embedding_model"],
+        "embedding_dimensions": len(job["embedding"])
+    }
