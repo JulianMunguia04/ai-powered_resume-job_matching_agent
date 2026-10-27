@@ -26,10 +26,6 @@ This project implements Sentence-BERT semantic similarity, a controlled LLM agen
 
 This diagram represents the high-level architecture of the AI-powered resume and job matching platform, including the request flow, agentic workflow, semantic matching engine, caching layer, and cloud deployment.
 
-<p align="center">
-  <img src="./Readme-Photos/System-Design.png" alt="System Design Diagram" width="800"/>
-</p>
-
 ### Overview
 
 - Users upload resumes and job descriptions through the React frontend (PDF/DOCX)
