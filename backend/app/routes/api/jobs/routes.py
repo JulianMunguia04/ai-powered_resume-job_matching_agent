@@ -6,6 +6,8 @@ from flask import Blueprint, render_template, jsonify, request, abort
 
 from services.embeddings import embed_text, MODEL_NAME
 
+from ..resumes.routes import resumes
+
 jobs_bp = Blueprint('jobs', __name__)
 
 # Temporary in-memory-storage (Records disappear when server restarts)
@@ -81,6 +83,80 @@ def get_job(job_id):
         }), 404
 
     return jsonify({"job": public_job(job)}), 200
+
+# POST /jobs/match
+# Match a stored resume against all stored jobs.
+@jobs_bp.route("/match", methods=["POST"])
+def match_jobs():
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return jsonify({
+            "error": "Request body must be a JSON object."
+        }), 400
+
+    resume_id = data.get("resume_id")
+
+    if not isinstance(resume_id, str) or not resume_id.strip():
+        return jsonify({
+            "error": "A non-empty resume_id is required."
+        }), 400
+
+    # 1. Retrieve the previously embedded resume.
+    resume = resumes.get(resume_id.strip())
+
+    if resume is None:
+        return jsonify({
+            "error": "Resume not found."
+        }), 404
+
+    # 2. Verify the resume uses the expected embedding model.
+    if resume["embedding_model"] != MODEL_NAME:
+        return jsonify({
+            "error": "Resume embedding model does not match."
+        }), 400
+
+    resume_embedding = resume["embedding"]
+
+    # 3. Compare the resume against every stored job.
+    matches = []
+
+    for job in jobs.values():
+        if job["embedding_model"] != resume["embedding_model"]:
+            continue
+
+        job_embedding = job["embedding"]
+
+        if len(resume_embedding) != len(job_embedding):
+            continue
+
+        # Both vectors are normalized, so their dot product
+        # is equivalent to cosine similarity.
+        similarity = sum(
+            resume_value * job_value
+            for resume_value, job_value
+            in zip(resume_embedding, job_embedding)
+        )
+
+        matches.append({
+            "job_id": job["id"],
+            "title": job["title"],
+            "description": job["description"],
+            "similarity_score": round(float(similarity), 4)
+        })
+
+    # 4. Sort from highest to lowest similarity.
+    matches.sort(
+        key=lambda match: match["similarity_score"],
+        reverse=True
+    )
+
+    # 5. Return the ranked jobs.
+    return jsonify({
+        "resume_id": resume["id"],
+        "total_matches": len(matches),
+        "matches": matches
+    }), 200
 
 # Helper Functions
 
