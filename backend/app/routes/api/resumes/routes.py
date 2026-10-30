@@ -3,6 +3,7 @@ from uuid import uuid4
 from flask import Blueprint, jsonify, request
 
 from services.embeddings import embed_text, MODEL_NAME
+from services.resume_analyzer import analyze_resume
 
 resumes_bp = Blueprint("resumes", __name__)
 
@@ -26,6 +27,7 @@ def create_resume():
 
     resume_id = str(uuid4())
     resume_text = text.strip()
+    analysis = analyze_resume(resume_text)
 
     # Generate the embedding once, when the resume is submitted.
     embedding = embed_text(resume_text)
@@ -35,6 +37,7 @@ def create_resume():
         "text": resume_text,
         "embedding": embedding,
         "embedding_model": MODEL_NAME,
+        "analysis": analysis,
     }
 
     resumes[resume_id] = resume
@@ -45,6 +48,7 @@ def create_resume():
             "id": resume_id,
             "embedding_model": MODEL_NAME,
             "embedding_dimensions": len(embedding),
+            "analysis": analysis,
         }
     }), 201
 
