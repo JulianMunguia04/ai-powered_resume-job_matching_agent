@@ -7,7 +7,10 @@ from flask import Blueprint, render_template, jsonify, request, abort
 from services.embeddings import embed_text, MODEL_NAME
 from services.job_analyzer import analyze_job
 from services.requirement_matching import match_job_requirements
-from services.hybrid_matching import calculate_hybrid_matches
+from services.hybrid_matching import (
+    calculate_hybrid_matches,
+    rerank_with_cross_encoder
+)
 
 from ..resumes.routes import resumes
 
@@ -236,6 +239,11 @@ def hybrid_match():
         }), 400
 
     matches = calculate_hybrid_matches(resume, jobs)
+    matches = rerank_with_cross_encoder(
+        resume,
+        matches,
+        jobs
+    )
 
     return jsonify({
         "resume_id": resume["id"],
