@@ -4,6 +4,8 @@ A full-stack, production-style recruitment assistant that combines transformer-b
 
 This project implements Sentence-BERT semantic similarity, a controlled LLM agent (planning, tool calling, verification, human escalation), Redis-backed caching and rate limiting, Docker containerization, and AWS deployment — built with transparency, privacy, and human oversight as first-class concerns.
 
+IT452 Project Capstone
+
 ---
 
 ## 🧰 Tech Stack
