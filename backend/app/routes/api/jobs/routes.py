@@ -6,6 +6,7 @@ from flask import Blueprint, render_template, jsonify, request, abort
 
 from services.embeddings import embed_text, MODEL_NAME
 from services.job_analyzer import analyze_job
+from services.requirement_matching import match_job_requirements
 
 from ..resumes.routes import resumes
 
@@ -157,6 +158,53 @@ def match_jobs():
         "resume_id": resume["id"],
         "total_matches": len(matches),
         "matches": matches
+    }), 200
+
+# Analyze job to resume
+@jobs_bp.route("/match-requirements", methods=["POST"])
+def match_requirements():
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return jsonify({"error": "Request body must be a JSON object."}), 400
+
+    resume_id = data.get("resume_id")
+    job_id = data.get("job_id")
+
+    if not isinstance(resume_id, str) or not resume_id.strip():
+        return jsonify({"error": "A non-empty resume_id is required."}), 400
+
+    if not isinstance(job_id, str) or not job_id.strip():
+        return jsonify({"error": "A non-empty job_id is required."}), 400
+
+    resume = resumes.get(resume_id.strip())
+    if resume is None:
+        return jsonify({"error": "Resume not found."}), 404
+
+    job = jobs.get(job_id.strip())
+    if job is None:
+        return jsonify({"error": "Job not found."}), 404
+
+    resume_analysis = resume.get("analysis")
+    job_analysis = job.get("analysis")
+
+    if not resume_analysis or not job_analysis:
+        return jsonify({
+            "error": "Resume or job analysis is unavailable."
+        }), 400
+
+    result = match_job_requirements(
+        resume_analysis,
+        job_analysis,
+    )
+
+    return jsonify({
+        "resume_id": resume["id"],
+        "job": {
+            "id": job["id"],
+            "title": job["title"],
+        },
+        "matching": result,
     }), 200
 
 # Helper Functions
