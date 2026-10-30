@@ -7,6 +7,7 @@ from flask import Blueprint, render_template, jsonify, request, abort
 from services.embeddings import embed_text, MODEL_NAME
 from services.job_analyzer import analyze_job
 from services.requirement_matching import match_job_requirements
+from services.hybrid_matching import calculate_hybrid_matches
 
 from ..resumes.routes import resumes
 
@@ -206,6 +207,50 @@ def match_requirements():
         },
         "matching": result,
     }), 200
+
+
+@jobs_bp.route("/hybrid-match", methods=["POST"])
+def hybrid_match():
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return jsonify({
+            "error": "Request body must be a JSON object."
+        }), 400
+
+    resume_id = data.get("resume_id")
+
+    if not isinstance(resume_id, str) or not resume_id.strip():
+        return jsonify({
+            "error": "A non-empty resume_id is required."
+        }), 400
+
+    resume = resumes.get(resume_id.strip())
+
+    if resume is None:
+        return jsonify({"error": "Resume not found."}), 404
+
+    if not resume.get("analysis") or not resume.get("embedding"):
+        return jsonify({
+            "error": "Resume analysis or embedding is unavailable."
+        }), 400
+
+    matches = calculate_hybrid_matches(resume, jobs)
+
+    return jsonify({
+        "resume_id": resume["id"],
+        "total_matches": len(matches),
+        "ranking_method": {
+            "name": "Hybrid NLP Matching",
+            "weights": {
+                "semantic": 0.35,
+                "bm25": 0.25,
+                "structured": 0.40,
+            },
+        },
+        "matches": matches,
+    }), 200
+
 
 # Helper Functions
 

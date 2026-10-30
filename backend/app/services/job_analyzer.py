@@ -128,6 +128,7 @@ def extract_responsibilities(text: str) -> list[str]:
     return results
 
 
+
 def analyze_job(description: str) -> dict:
     """Convert a job description into structured matching information."""
     detected_skills = extract_skills(description)
@@ -135,12 +136,26 @@ def analyze_job(description: str) -> dict:
     skill_requirements = []
 
     for skill in detected_skills:
-        for evidence in skill["evidence"]:
-            skill_requirements.append({
-                "name": skill["name"],
-                "requirement_type": classify_requirement(evidence),
-                "evidence": evidence,
-            })
+        evidence_items = skill["evidence"]
+
+        # Determine the strongest classification found for this skill.
+        classifications = [
+            classify_requirement(evidence)
+            for evidence in evidence_items
+        ]
+
+        if "required" in classifications:
+            requirement_type = "required"
+        elif "preferred" in classifications:
+            requirement_type = "preferred"
+        else:
+            requirement_type = "mentioned"
+
+        skill_requirements.append({
+            "name": skill["name"],
+            "requirement_type": requirement_type,
+            "evidence": evidence_items,
+        })
 
     return {
         "skills": skill_requirements,
