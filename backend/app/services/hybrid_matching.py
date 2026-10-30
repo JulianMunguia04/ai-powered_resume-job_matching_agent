@@ -4,6 +4,7 @@ import re
 from rank_bm25 import BM25Okapi
 
 from services.requirement_matching import match_job_requirements
+from services.cross_encoder import calculate_cross_encoder_score
 
 
 # Initial experimental weights.
@@ -168,3 +169,57 @@ def calculate_hybrid_matches(resume: dict, jobs: dict) -> list[dict]:
     )
 
     return results
+
+
+def rerank_with_cross_encoder(resume, matches, jobs):
+    """
+    Rerank hybrid matching results using a Cross-Encoder.
+
+    The hybrid system first identifies and ranks candidates.
+    The Cross-Encoder then evaluates each resume-job pair
+    together and produces a refined ranking.
+    """
+
+    # Create a lookup for the full job records.
+    jobs_by_id = {
+        job["id"]: job
+        for job in jobs.values()
+    }
+
+    reranked_matches = []
+
+    for match in matches:
+
+        job = jobs_by_id.get(match["job_id"])
+
+        if job is None:
+            continue
+
+        # Combine the job title and description.
+        job_text = (
+            job["title"] + "\n" + job["description"]
+        )
+
+        # Evaluate the resume against the job.
+        cross_score = calculate_cross_encoder_score(
+            resume["text"],
+            job_text
+        )
+
+        # Add the Cross-Encoder score to the existing results.
+        match["scores"]["cross_encoder"] = cross_score
+
+        reranked_matches.append(match)
+
+    # Sort using the Cross-Encoder score.
+    reranked_matches.sort(
+        key=lambda item: item["scores"]["cross_encoder"],
+        reverse=True
+    )
+
+    # Assign the new ranking positions.
+    for index, match in enumerate(reranked_matches, start=1):
+        match["cross_encoder_rank"] = index
+
+    return reranked_matches
+
