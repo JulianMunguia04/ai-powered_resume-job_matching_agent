@@ -5,6 +5,7 @@ from uuid import uuid4
 from flask import Blueprint, render_template, jsonify, request, abort
 
 from services.embeddings import embed_text, MODEL_NAME
+from services.job_analyzer import analyze_job
 
 from ..resumes.routes import resumes
 
@@ -33,6 +34,8 @@ def create_job():
     title = data.get("title")
     description = data.get("description")
 
+    analysis = analyze_job(description.strip())
+
     if not isinstance(title, str) or not title.strip():
         return jsonify({
             "error": "A non-empty title is required."
@@ -55,7 +58,8 @@ def create_job():
         "title": title.strip(),
         "description": description.strip(),
         "embedding": embedding,
-        "embedding_model": MODEL_NAME
+        "embedding_model": MODEL_NAME,
+        "analysis": analysis,
     }
 
     jobs[job_id] = job
@@ -63,11 +67,8 @@ def create_job():
     # Do not send the entire embedding vector to the client.
     return jsonify({
         "job": {
-            "id": job["id"],
-            "title": job["title"],
-            "description": job["description"],
-            "embedding_model": job["embedding_model"],
-            "embedding_dimensions": len(embedding)
+            **public_job(job),
+            "analysis": analysis,
         }
     }), 201
 
