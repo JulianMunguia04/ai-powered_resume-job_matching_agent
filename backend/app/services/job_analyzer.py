@@ -81,6 +81,12 @@ EDUCATION_CUES = [
     "degree",
     "diploma",
     "phd",
+    "doctorate",
+    "associate degree",
+    "academic qualification",
+    "educational qualification",
+    "university degree",
+    "college degree",
     "certification",
     "certified",
 ]
@@ -187,7 +193,6 @@ def classify_requirement(text, section_type="general"):
         return "preferred"
 
     return "mentioned"
-
 
 
 def find_evidence_section(evidence, sections):
@@ -334,28 +339,55 @@ def extract_experience_requirements(sections):
 # EDUCATION REQUIREMENTS
 # --------------------------------------------------
 
+
 def extract_education_requirements(sections):
     """
-    Extract education requirements and identify degree level
-    and field of study when possible.
+    Extract genuine academic and certification requirements.
+
+    Technical skills and general statements about expertise should
+    not be classified as education requirements.
     """
     education_requirements = []
 
     degree_patterns = [
-        (r"\bph\.?d\.?\b|\bdoctorate\b", "phd"),
-        (r"\bmaster'?s?\b|\bmasters\b", "masters"),
-        (r"\bbachelor'?s?\b|\bbachelors\b", "bachelors"),
-        (r"\bdiploma\b", "diploma"),
-        (r"\bassociate'?s?\b|\bassociates\b", "associates"),
-        (r"\bcertificate\b|\bcertification\b", "certificate"),
+        (
+            r"\b(?:ph\.?\s*d\.?|doctorate|doctoral degree)\b",
+            "doctorate",
+        ),
+        (
+            r"\b(?:master'?s?|masters|M\.?\s*S\.?|M\.?\s*Sc\.?|"
+            r"M\.?\s*Eng\.?|MBA)\b",
+            "masters",
+        ),
+        (
+            r"\b(?:bachelor'?s?|bachelors|B\.?\s*S\.?|B\.?\s*Sc\.?|"
+            r"B\.?\s*A\.?|B\.?\s*Eng\.?)\b",
+            "bachelors",
+        ),
+        (
+            r"\b(?:associate'?s?|associates|A\.?\s*A\.?|A\.?\s*S\.?)\b",
+            "associate",
+        ),
+        (
+            r"\bdiploma\b",
+            "diploma",
+        ),
+        (
+            r"\b(?:certificate|certification)\b",
+            "certificate",
+        ),
     ]
 
-    for section_name in [
+    # Only inspect education sections and lines containing explicit
+    # academic qualification language in other sections.
+    searchable_sections = [
         "education",
         "required",
         "preferred",
         "general",
-    ]:
+    ]
+
+    for section_name in searchable_sections:
         section_text = sections.get(section_name, "")
 
         if not section_text:
@@ -363,32 +395,55 @@ def extract_education_requirements(sections):
 
         for line in section_text.splitlines():
             cleaned_line = line.strip()
-            normalized = normalize_text(cleaned_line)
 
-            if not any(
-                cue in normalized for cue in EDUCATION_CUES
-            ):
+            if not cleaned_line:
                 continue
 
             degree_level = None
 
             for pattern, level in degree_patterns:
-                if re.search(pattern, cleaned_line, re.IGNORECASE):
+                if re.search(
+                    pattern,
+                    cleaned_line,
+                    flags=re.IGNORECASE,
+                ):
                     degree_level = level
                     break
 
-            # Extract the field of study following "in" or "of".
+            # A line must contain an explicit academic qualification.
+            # General technical mastery is not an education requirement.
+            if degree_level is None:
+                continue
+
+            normalized = normalize_text(cleaned_line)
+
+            if not any(
+                cue in normalized
+                for cue in EDUCATION_CUES
+            ):
+                continue
+
+            # Extract the field following "in" or "of".
             field = None
 
             field_match = re.search(
                 r"\b(?:in|of)\s+(.+?)(?:[.;]|$)",
                 cleaned_line,
-                re.IGNORECASE,
+                flags=re.IGNORECASE,
             )
 
             if field_match:
                 field = field_match.group(1).strip()
-                field = re.sub(r"^a\s+", "", field, flags=re.IGNORECASE)
+
+                # Remove trailing qualification phrases.
+                field = re.sub(
+                    r"\b(or a related field|or related field)\b.*$",
+                    "",
+                    field,
+                    flags=re.IGNORECASE,
+                )
+
+                field = field.strip(" ,.-")
 
             education_requirements.append({
                 "degree_level": degree_level,
@@ -412,7 +467,6 @@ def extract_education_requirements(sections):
             unique_requirements.append(requirement)
 
     return unique_requirements
-
 
 # --------------------------------------------------
 # RESPONSIBILITIES
