@@ -1,4 +1,3 @@
-
 import re
 
 from rank_bm25 import BM25Okapi
@@ -40,11 +39,14 @@ def normalize_bm25_scores(scores: list[float]) -> list[float]:
 
 def calculate_semantic_score(resume: dict, job: dict) -> float:
     """Calculate cosine similarity using previously stored embeddings."""
-    if resume["embedding_model"] != job["embedding_model"]:
+    if resume.get("embedding_model") != job.get("embedding_model"):
         return 0.0
 
-    resume_vector = resume["embedding"]
-    job_vector = job["embedding"]
+    resume_vector = resume.get("embedding", [])
+    job_vector = job.get("embedding", [])
+
+    if not resume_vector or not job_vector:
+        return 0.0
 
     if len(resume_vector) != len(job_vector):
         return 0.0
@@ -180,7 +182,6 @@ def rerank_with_cross_encoder(resume, matches, jobs):
     together and produces a refined ranking.
     """
 
-    # Create a lookup for the full job records.
     jobs_by_id = {
         job["id"]: job
         for job in jobs.values()
@@ -189,25 +190,23 @@ def rerank_with_cross_encoder(resume, matches, jobs):
     reranked_matches = []
 
     for match in matches:
-
         job = jobs_by_id.get(match["job_id"])
 
         if job is None:
             continue
 
-        # Combine the job title and description.
         job_text = (
             job["title"] + "\n" + job["description"]
         )
 
-        # Evaluate the resume against the job.
         cross_score = calculate_cross_encoder_score(
             resume["text"],
             job_text
         )
 
-        # Add the Cross-Encoder score to the existing results.
-        match["scores"]["cross_encoder"] = cross_score
+        match["scores"]["cross_encoder"] = round(
+            cross_score, 4
+        )
 
         reranked_matches.append(match)
 
@@ -217,9 +216,47 @@ def rerank_with_cross_encoder(resume, matches, jobs):
         reverse=True
     )
 
-    # Assign the new ranking positions.
     for index, match in enumerate(reranked_matches, start=1):
         match["cross_encoder_rank"] = index
 
     return reranked_matches
 
+
+def evaluate_resume_job(resume: dict, job: dict) -> dict:
+    """
+    Perform a detailed evaluation of one resume against one job.
+
+    Unlike calculate_hybrid_matches(), this function does not
+    use BM25 because it evaluates only one resume-job pairing.
+    """
+
+    semantic_score = calculate_semantic_score(resume, job)
+
+    matching_result = match_job_requirements(
+        resume["analysis"],
+        job["analysis"],
+    )
+
+    structured_score = calculate_structured_score(
+        matching_result
+    )
+
+    job_text = (
+        job["title"] + "\n" + job["description"]
+    )
+
+    cross_encoder_score = calculate_cross_encoder_score(
+        resume["text"],
+        job_text
+    )
+
+    return {
+        "job_id": job["id"],
+        "title": job["title"],
+        "scores": {
+            "semantic": round(semantic_score, 4),
+            "structured": round(structured_score, 4),
+            "cross_encoder": round(cross_encoder_score, 4),
+        },
+        "matching": matching_result,
+    }
