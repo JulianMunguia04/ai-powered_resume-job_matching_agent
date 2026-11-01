@@ -5,9 +5,8 @@ from datetime import date
 from services.skill_extraction import extract_skills
 
 
-# --------------------------------------------------
-# SECTION HEADINGS
-# --------------------------------------------------
+ANALYSIS_VERSION = "3.0"
+
 
 SECTION_NAMES = {
     "summary": [
@@ -15,15 +14,14 @@ SECTION_NAMES = {
         "professional summary",
         "profile",
         "objective",
-        "about me",
+        "career objective",
     ],
     "experience": [
         "experience",
         "work experience",
         "employment history",
         "professional experience",
-        "work history",
-        "professional background",
+        "professional experience and employment",
     ],
     "education": [
         "education",
@@ -35,7 +33,6 @@ SECTION_NAMES = {
         "personal projects",
         "academic projects",
         "technical projects",
-        "selected projects",
     ],
     "certifications": [
         "certifications",
@@ -47,127 +44,10 @@ SECTION_NAMES = {
         "skills",
         "technical skills",
         "technologies",
-        "technical proficiencies",
-        "core competencies",
+        "technical competencies",
     ],
 }
 
-
-# --------------------------------------------------
-# DEGREE LEVELS
-# --------------------------------------------------
-
-DEGREE_PATTERNS = [
-    (r"\bph\.?d\.?\b|\bdoctorate\b", "phd"),
-    (r"\bmaster'?s?\b|\bmasters\b|\bm\.sc\.?\b|\bmba\b", "masters"),
-    (r"\bbachelor'?s?\b|\bbachelors\b|\bb\.sc\.?\b|\bb\.a\.?\b|\bb\.s\.?\b", "bachelors"),
-    (r"\bassociate'?s?\b|\bassociate degree\b", "associates"),
-    (r"\bdiploma\b", "diploma"),
-    (r"\bcertificate\b|\bcertification\b", "certificate"),
-]
-
-
-# --------------------------------------------------
-# TEXT NORMALIZATION
-# --------------------------------------------------
-
-def normalize_heading(line: str) -> str:
-    """Normalize a possible resume heading for comparison."""
-    return re.sub(r"[^a-z ]", "", line.lower()).strip()
-
-
-def normalize_text(text: str) -> str:
-    """Normalize text for consistent comparisons."""
-    return re.sub(r"\s+", " ", text.lower()).strip()
-
-
-# --------------------------------------------------
-# SECTION EXTRACTION
-# --------------------------------------------------
-
-def extract_sections(text: str) -> dict:
-    """
-    Split resume text into common sections based on heading lines.
-
-    Unrecognized content is stored under 'other'.
-    """
-    sections = {"other": []}
-
-    current_section = "other"
-
-    heading_lookup = {
-        normalize_heading(heading): section
-        for section, headings in SECTION_NAMES.items()
-        for heading in headings
-    }
-
-    for line in text.splitlines():
-        cleaned_line = line.strip()
-
-        if not cleaned_line:
-            continue
-
-        # Allow headings with trailing colons.
-        normalized = normalize_heading(cleaned_line.rstrip(":"))
-
-        if normalized in heading_lookup:
-            current_section = heading_lookup[normalized]
-            sections.setdefault(current_section, [])
-        else:
-            sections.setdefault(current_section, []).append(cleaned_line)
-
-    return {
-        section: "\n".join(lines).strip()
-        for section, lines in sections.items()
-        if lines
-    }
-
-
-# --------------------------------------------------
-# SKILL EXTRACTION
-# --------------------------------------------------
-
-def analyze_resume_skills(text: str, sections: dict) -> list:
-    """
-    Extract skills and identify the section containing their evidence.
-
-    Being listed in a skills section does not automatically mean
-    the candidate has demonstrated the skill.
-    """
-    extracted_skills = extract_skills(text)
-
-    analyzed_skills = []
-
-    for skill in extracted_skills:
-        evidence_items = []
-
-        for evidence in skill.get("evidence", []):
-            normalized_evidence = normalize_text(evidence)
-            evidence_section = "other"
-
-            for section_name, section_text in sections.items():
-                normalized_section = normalize_text(section_text)
-
-                if normalized_evidence in normalized_section:
-                    evidence_section = section_name
-                    break
-
-            evidence_items.append({
-                "text": evidence,
-                "section": evidence_section,
-            })
-
-        analyzed_skills.append({
-            "name": skill["name"],
-            "evidence": evidence_items,
-        })
-
-    return analyzed_skills
-
-
-# --------------------------------------------------
-# DATE EXTRACTION
-# --------------------------------------------------
 
 MONTHS = {
     "jan": 1, "january": 1,
@@ -185,130 +65,167 @@ MONTHS = {
 }
 
 
-def parse_date_value(value: str):
-    """
-    Convert a month/year or year into a (year, month) tuple.
+DATE_PATTERN = (
+    r"\b("
+    r"Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|"
+    r"Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|"
+    r"Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?"
+    r")\.?\s+\d{4}\b"
+    r"|\b\d{4}\b"
+)
 
-    Examples:
-    May 2023 -> (2023, 5)
-    2024 -> (2024, 1)
 
-    Returns None when the date cannot be interpreted.
-    """
-    value = value.strip().lower()
+def clean_line(line):
+    """Normalize whitespace while preserving the line's content."""
+    return re.sub(r"\s+", " ", line).strip()
 
-    if value in ["present", "current", "now"]:
+
+def normalize_heading(line):
+    return re.sub(r"[^a-z ]", "", line.lower()).strip()
+
+
+def normalize_text(text):
+    return re.sub(r"\s+", " ", text.lower()).strip()
+
+
+def split_nonempty_lines(text):
+    return [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip()
+    ]
+
+
+def extract_sections(text):
+    """Split resume text into recognized sections."""
+    sections = {"other": []}
+    current_section = "other"
+
+    heading_lookup = {
+        normalize_heading(heading): section
+        for section, headings in SECTION_NAMES.items()
+        for heading in headings
+    }
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+
+        if not line:
+            continue
+
+        normalized = normalize_heading(line)
+
+        if normalized in heading_lookup:
+            current_section = heading_lookup[normalized]
+            sections.setdefault(current_section, [])
+        else:
+            sections.setdefault(current_section, []).append(line)
+
+    return {
+        section: "\n".join(lines).strip()
+        for section, lines in sections.items()
+        if lines
+    }
+
+
+def parse_date_value(value):
+    """Convert a month/year or year value into a sortable month index."""
+    value = value.strip().lower().replace(".", "")
+
+    if value in {"present", "current", "now"}:
         today = date.today()
         return today.year, today.month
 
-    month_year = re.fullmatch(
-        r"([a-z]+)\.?\s+(\d{4})",
+    month_match = re.search(
+        r"\b([a-z]+)\s+(\d{4})\b",
         value,
+        flags=re.IGNORECASE,
     )
 
-    if month_year:
-        month_name = month_year.group(1)
-        year = int(month_year.group(2))
-
+    if month_match:
+        month_name = month_match.group(1).lower()
+        year = int(month_match.group(2))
         month = MONTHS.get(month_name)
 
         if month:
             return year, month
 
-    year_only = re.fullmatch(r"\d{4}", value)
+    year_match = re.search(r"\b(19|20)\d{2}\b", value)
 
-    if year_only:
-        return int(value), 1
+    if year_match:
+        return int(year_match.group()), 1
 
     return None
 
 
-def extract_date_ranges(text: str) -> list:
-    """
-    Identify date ranges such as:
-    May 2023 - August 2024
-    2022 - 2024
-    January 2025 - Present
-
-    This is a first-pass date parser.
-    """
-    month_pattern = (
-        r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|"
-        r"Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|"
-        r"Aug(?:ust)?|Sep(?:t(?:ember)?)?|"
-        r"Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
-    )
-
-    date_pattern = (
-        rf"(?:{month_pattern}\.?\s+\d{{4}}|\d{{4}}|"
-        r"Present|Current|Now)"
-    )
-
-    range_pattern = re.compile(
-        rf"({date_pattern})\s*(?:-|–|—|to)\s*({date_pattern})",
-        re.IGNORECASE,
+def extract_date_ranges(text):
+    """Find date ranges such as 'May 2025 – Sept 2025'."""
+    pattern = re.compile(
+        rf"({DATE_PATTERN})\s*(?:-|–|—|to)\s*"
+        rf"({DATE_PATTERN}|Present|Current|Now)",
+        flags=re.IGNORECASE,
     )
 
     ranges = []
 
-    for match in range_pattern.finditer(text):
-        start = parse_date_value(match.group(1))
-        end = parse_date_value(match.group(2))
+    for match in pattern.finditer(text):
+        start_raw = match.group(1).strip()
+        end_raw = match.group(2).strip()
+
+        start = parse_date_value(start_raw)
+        end = parse_date_value(end_raw)
 
         if not start or not end:
             continue
 
-        if start > end:
+        if end < start:
             continue
 
         ranges.append({
-            "start": {
-                "year": start[0],
-                "month": start[1],
-            },
-            "end": {
-                "year": end[0],
-                "month": end[1],
-            },
-            "evidence": match.group(0),
+            "start_raw": start_raw,
+            "end_raw": end_raw,
+            "start_year": start[0],
+            "start_month": start[1],
+            "end_year": end[0],
+            "end_month": end[1],
+            "months": (
+                (end[0] - start[0]) * 12
+                + end[1] - start[1]
+                + 1
+            ),
         })
 
     return ranges
 
 
-def calculate_total_experience(date_ranges: list):
-    """
-    Calculate the combined duration of date ranges in months.
-
-    Overlapping date ranges are merged to avoid double-counting
-    concurrent jobs.
-    """
+def calculate_total_experience(date_ranges):
+    """Calculate total calendar months, merging overlapping date ranges."""
     intervals = []
 
-    for date_range in date_ranges:
-        start = date_range["start"]
-        end = date_range["end"]
-
-        start_month = start["year"] * 12 + start["month"] - 1
-        end_month = end["year"] * 12 + end["month"] - 1
-
-        intervals.append((start_month, end_month))
+    for item in date_ranges:
+        start = item["start_year"] * 12 + item["start_month"]
+        end = item["end_year"] * 12 + item["end_month"]
+        intervals.append((start, end))
 
     if not intervals:
         return {
-            "total_months": None,
-            "total_years": None,
+            "total_months": 0,
+            "total_years": 0.0,
         }
 
     intervals.sort()
 
     merged = []
+    current_start, current_end = intervals[0]
 
-    for start, end in intervals:
-        if not merged or start > merged[-1][1] + 1:
-            merged.append([start, end])
+    for start, end in intervals[1:]:
+        if start <= current_end + 1:
+            current_end = max(current_end, end)
         else:
-            merged[-1][1] = max(merged[-1][1], end)
+            merged.append((current_start, current_end))
+            current_start, current_end = start, end
+
+    merged.append((current_start, current_end))
 
     total_months = sum(
         end - start + 1
@@ -321,202 +238,425 @@ def calculate_total_experience(date_ranges: list):
     }
 
 
-# --------------------------------------------------
-# WORK EXPERIENCE EXTRACTION
-# --------------------------------------------------
+def split_columns(line):
+    """Split lines that use tabs or multiple spaces as visual columns."""
+    parts = re.split(r"\t+|\s{2,}", line)
 
-def extract_work_experience(sections: dict) -> dict:
+    return [
+        clean_line(part)
+        for part in parts
+        if clean_line(part)
+    ]
+
+
+def strip_date_range(line):
+    """Remove the first date range from a line and return both parts."""
+    ranges = extract_date_ranges(line)
+
+    if not ranges:
+        return clean_line(line), None
+
+    match = re.search(
+        rf"{DATE_PATTERN}\s*(?:-|–|—|to)\s*"
+        rf"(?:{DATE_PATTERN}|Present|Current|Now)",
+        line,
+        flags=re.IGNORECASE,
+    )
+
+    if not match:
+        return clean_line(line), ranges[0]
+
+    remaining = line[:match.start()] + line[match.end():]
+
+    return clean_line(remaining.strip(" |,\t-–—")), ranges[0]
+
+
+def format_month_year(year, month):
+    month_name = [
+        "January", "February", "March", "April",
+        "May", "June", "July", "August",
+        "September", "October", "November", "December",
+    ][month - 1]
+
+    return f"{month_name} {year}"
+
+
+def analyze_resume_skills(text, sections):
     """
-    Extract recognizable employment date ranges and supporting
-    resume text.
+    Extract skills while preserving compatibility with the existing
+    requirement matcher.
 
-    This does not yet reliably identify every job title or employer.
+    evidence remains a list of strings.
+    evidence_details adds the section where each item appeared.
     """
-    experience_text = sections.get("experience", "")
+    extracted = extract_skills(text)
+    results = []
 
-    date_ranges = extract_date_ranges(experience_text)
+    for skill in extracted:
+        evidence_details = []
 
-    entries = []
+        for evidence in skill.get("evidence", []):
+            evidence_text = (
+                evidence.get("text")
+                if isinstance(evidence, dict)
+                else evidence
+            )
 
-    lines = experience_text.splitlines()
+            if not evidence_text:
+                continue
 
-    for index, line in enumerate(lines):
-        ranges = extract_date_ranges(line)
+            evidence_section = "other"
 
-        if not ranges:
-            continue
+            for section_name, section_text in sections.items():
+                if evidence_text.lower() in section_text.lower():
+                    evidence_section = section_name
+                    break
 
-        # Capture the date line and nearby context.
-        context = []
+            evidence_details.append({
+                "text": evidence_text,
+                "section": evidence_section,
+            })
 
-        if index > 0:
-            context.append(lines[index - 1].strip())
-
-        context.append(line.strip())
-
-        if index + 1 < len(lines):
-            context.append(lines[index + 1].strip())
-
-        entries.append({
-            "date_ranges": ranges,
-            "evidence": [item for item in context if item],
+        results.append({
+            "name": skill["name"],
+            "evidence": [
+                item["text"]
+                for item in evidence_details
+            ],
+            "evidence_details": evidence_details,
         })
 
-    total_experience = calculate_total_experience(date_ranges)
-
-    return {
-        "entries": entries,
-        "date_ranges": date_ranges,
-        "total_experience": total_experience,
-    }
+    return results
 
 
-# --------------------------------------------------
-# EDUCATION EXTRACTION
-# --------------------------------------------------
-
-def extract_education(sections: dict) -> list:
-    """
-    Extract education records and identify degree levels,
-    fields of study, institutions, and dates when recognizable.
-    """
+def extract_education(sections):
+    """Extract multiple education records from the education section."""
     education_text = sections.get("education", "")
+    lines = split_nonempty_lines(education_text)
 
-    if not education_text:
-        return []
-
-    lines = [
-        line.strip()
-        for line in education_text.splitlines()
-        if line.strip()
+    degree_patterns = [
+        ("masters", r"\b(?:M\.?\s*S\.?|M\.?\s*Sc\.?|M\.?\s*Eng\.?|Master'?s)\b"),
+        ("bachelors", r"\b(?:B\.?\s*S\.?|B\.?\s*Sc\.?|B\.?\s*A\.?|B\.?\s*Eng\.?|Bachelor'?s)\b"),
+        ("doctorate", r"\b(?:Ph\.?\s*D\.?|Doctorate|Doctor of)\b"),
+        ("associate", r"\b(?:A\.?\s*A\.?|A\.?\s*S\.?|Associate'?s)\b"),
+        ("diploma", r"\bDiploma\b"),
     ]
 
     education_records = []
+    current_institution = None
 
     for index, line in enumerate(lines):
-        degree_level = None
+        normalized = line.lower()
 
-        for pattern, level in DEGREE_PATTERNS:
-            if re.search(pattern, line, re.IGNORECASE):
+        degree_level = None
+        for level, pattern in degree_patterns:
+            if re.search(pattern, line, flags=re.IGNORECASE):
                 degree_level = level
                 break
 
-        if not degree_level:
+        if degree_level is None:
+            # Institution names generally precede their degree line.
+            if not re.search(
+                r"\b(dean'?s list|honou?rs?|expected|graduated|gpa)\b",
+                normalized,
+            ) and not re.search(r"\b(19|20)\d{2}\b", line):
+                current_institution = line
             continue
 
-        field = None
-
-        field_match = re.search(
-            r"\b(?:in|of)\s+(.+?)(?:[,;]|$)",
-            line,
-            re.IGNORECASE,
+        is_incoming = bool(re.search(r"\bincoming\b", line, re.IGNORECASE))
+        has_expected_date = bool(
+            re.search(r"\bexpected\b", line, re.IGNORECASE)
         )
 
-        if field_match:
-            field = field_match.group(1).strip()
-
-        graduation_year = None
-
-        year_match = re.search(
-            r"\b(19\d{2}|20\d{2})\b",
+        date_match = re.search(
+            r"\bExpected\s+([A-Za-z.]+\s+\d{4})",
             line,
+            flags=re.IGNORECASE,
         )
 
-        if year_match:
-            graduation_year = int(year_match.group(1))
+        expected_graduation = (
+            clean_line(date_match.group(1))
+            if date_match
+            else None
+        )
 
-        # Include adjacent lines as context for the education record.
-        evidence = []
+        year_match = re.search(r"\b(19|20)\d{2}\b", line)
+        graduation_year = (
+            int(year_match.group())
+            if year_match
+            else None
+        )
 
-        if index > 0:
-            evidence.append(lines[index - 1])
+        # Remove degree wording and expected graduation details to isolate field.
+        field = re.sub(
+            r"\bIncoming\b",
+            "",
+            line,
+            flags=re.IGNORECASE,
+        )
+        field = re.sub(
+            r"\bExpected\s+[A-Za-z.]+\s+\d{4}\b",
+            "",
+            field,
+            flags=re.IGNORECASE,
+        )
+        field = re.sub(
+            r"\b(19|20)\d{2}\b",
+            "",
+            field,
+        )
+        field = re.sub(
+            r"\b(?:M\.?\s*S\.?|M\.?\s*Sc\.?|M\.?\s*Eng\.?|"
+            r"B\.?\s*S\.?|B\.?\s*Sc\.?|B\.?\s*A\.?|B\.?\s*Eng\.?|"
+            r"Ph\.?\s*D\.?|A\.?\s*A\.?|A\.?\s*S\.?|"
+            r"Master'?s|Bachelor'?s|Associate'?s|Diploma)\b",
+            "",
+            field,
+            flags=re.IGNORECASE,
+        )
+        field = re.sub(r"^\s*in\s+", "", field, flags=re.IGNORECASE)
+        field = clean_line(field.strip(" |,-"))
 
-        evidence.append(line)
+        if is_incoming:
+            status = "incoming"
+        elif has_expected_date:
+            status = "in_progress"
+        else:
+            status = "unspecified"
 
-        if index + 1 < len(lines):
-            evidence.append(lines[index + 1])
-
-        institution = None
-
-        for context_line in evidence:
-            if context_line != line and not re.search(
-                r"\b(19\d{2}|20\d{2})\b",
-                context_line,
-            ):
-                institution = context_line
-                break
+        evidence = [line]
+        if current_institution:
+            evidence.insert(0, current_institution)
 
         education_records.append({
             "degree_level": degree_level,
-            "field": field,
-            "institution": institution,
+            "field": field or None,
+            "institution": current_institution,
             "graduation_year": graduation_year,
+            "expected_graduation": expected_graduation,
+            "status": status,
             "evidence": evidence,
         })
 
     return education_records
 
 
-# --------------------------------------------------
-# PROJECT EXTRACTION
-# --------------------------------------------------
+def extract_work_experience(sections):
+    """Convert experience section lines into structured employment records."""
+    experience_text = sections.get("experience", "")
+    lines = split_nonempty_lines(experience_text)
 
-def extract_projects(sections: dict) -> list:
-    """
-    Preserve project descriptions as individual entries.
+    entries = []
+    all_date_ranges = []
 
-    Project boundaries are initially inferred from non-empty lines.
-    """
+    date_line_indexes = []
+
+    for index, line in enumerate(lines):
+        ranges = extract_date_ranges(line)
+
+        if ranges:
+            date_line_indexes.append(index)
+            all_date_ranges.extend(ranges)
+
+    for position, line_index in enumerate(date_line_indexes):
+        line = lines[line_index]
+        title_text, date_range = strip_date_range(line)
+
+        previous_line = (
+            lines[line_index - 1]
+            if line_index > 0
+            else ""
+        )
+
+        employer_columns = split_columns(previous_line)
+
+        employer = (
+            employer_columns[0]
+            if employer_columns
+            else previous_line
+        )
+
+        location = (
+            employer_columns[1]
+            if len(employer_columns) > 1
+            else None
+        )
+
+        title_columns = split_columns(title_text)
+        job_title = (
+            title_columns[0]
+            if title_columns
+            else title_text
+        )
+
+        next_date_index = (
+            date_line_indexes[position + 1]
+            if position + 1 < len(date_line_indexes)
+            else len(lines)
+        )
+
+        responsibility_lines = lines[line_index + 1:next_date_index]
+
+        # Exclude an employer heading immediately before the next dated role.
+        if responsibility_lines:
+            responsibility_lines = [
+                item for item in responsibility_lines
+                if item.strip()
+            ]
+
+        start_date = None
+        end_date = None
+
+        if date_range:
+            start_date = format_month_year(
+                date_range["start_year"],
+                date_range["start_month"],
+            )
+
+            if date_range["end_raw"].lower() in {
+                "present", "current", "now"
+            }:
+                end_date = "Present"
+            else:
+                end_date = format_month_year(
+                    date_range["end_year"],
+                    date_range["end_month"],
+                )
+
+        entries.append({
+            "employer": employer or None,
+            "location": location,
+            "job_title": job_title or None,
+            "start_date": start_date,
+            "end_date": end_date,
+            "date_range": date_range,
+            "responsibilities": responsibility_lines,
+            "evidence": [
+                previous_line,
+                line,
+                *responsibility_lines,
+            ] if previous_line else [
+                line,
+                *responsibility_lines,
+            ],
+        })
+
+    return {
+        "entries": entries,
+        "date_ranges": all_date_ranges,
+        "total_experience": calculate_total_experience(all_date_ranges),
+    }
+
+
+def is_project_header(line):
+    """Identify project title lines, usually containing a stack and dates."""
+    has_date = bool(extract_date_ranges(line))
+    has_separator = "|" in line
+
+    return (
+        has_date
+        and has_separator
+        and len(line) < 300
+    )
+
+
+def extract_projects(sections):
+    """Group each project title, technology stack, date, and description."""
     project_text = sections.get("projects", "")
+    lines = split_nonempty_lines(project_text)
 
     projects = []
+    current_project = None
 
-    for line in project_text.splitlines():
-        cleaned_line = line.strip()
+    def save_current():
+        if current_project is not None:
+            projects.append(current_project.copy())
 
-        if cleaned_line:
-            projects.append({
-                "description": cleaned_line,
-            })
+    for line in lines:
+        if is_project_header(line):
+            save_current()
+
+            parts = [clean_line(part) for part in line.split("|")]
+            parts = [part for part in parts if part]
+
+            name = parts[0] if parts else line
+            remainder = " | ".join(parts[1:])
+
+            _, date_range = strip_date_range(line)
+
+            # Remove the date from the stack text.
+            stack_text, _ = strip_date_range(remainder)
+
+            technologies = [
+                clean_line(item)
+                for item in re.split(r",|;", stack_text)
+                if clean_line(item)
+            ]
+
+            current_project = {
+                "name": name,
+                "technologies": technologies,
+                "start_date": None,
+                "end_date": None,
+                "date_range": date_range,
+                "descriptions": [],
+                "evidence": [line],
+            }
+
+            if date_range:
+                current_project["start_date"] = format_month_year(
+                    date_range["start_year"],
+                    date_range["start_month"],
+                )
+
+                if date_range["end_raw"].lower() in {
+                    "present", "current", "now"
+                }:
+                    current_project["end_date"] = "Present"
+                else:
+                    current_project["end_date"] = format_month_year(
+                        date_range["end_year"],
+                        date_range["end_month"],
+                    )
+
+        elif current_project is not None:
+            current_project["descriptions"].append(line)
+            current_project["evidence"].append(line)
+
+        else:
+            # Keep unclassified project-section content rather than dropping it.
+            current_project = {
+                "name": None,
+                "technologies": [],
+                "start_date": None,
+                "end_date": None,
+                "date_range": None,
+                "descriptions": [line],
+                "evidence": [line],
+            }
+
+    save_current()
 
     return projects
 
 
-# --------------------------------------------------
-# CERTIFICATION EXTRACTION
-# --------------------------------------------------
-
-def extract_certifications(sections: dict) -> list:
-    """
-    Extract certification entries from the certifications section.
-    """
+def extract_certifications(sections):
     certification_text = sections.get("certifications", "")
 
     return [
-        line.strip()
-        for line in certification_text.splitlines()
-        if line.strip()
+        line
+        for line in split_nonempty_lines(certification_text)
     ]
 
 
-# --------------------------------------------------
-# MAIN RESUME ANALYSIS
-# --------------------------------------------------
-
-def analyze_resume(text: str) -> dict:
-    """
-    Analyze a resume and return structured candidate information.
-    """
+def analyze_resume(text):
+    """Run the complete resume analysis pipeline."""
     sections = extract_sections(text)
 
     skills = analyze_resume_skills(text, sections)
-
-    work_experience = extract_work_experience(sections)
-
     education = extract_education(sections)
-
+    work_experience = extract_work_experience(sections)
     projects = extract_projects(sections)
-
     certifications = extract_certifications(sections)
 
     return {
@@ -526,5 +666,5 @@ def analyze_resume(text: str) -> dict:
         "projects": projects,
         "certifications": certifications,
         "sections": sections,
-        "analysis_version": "2.0",
+        "analysis_version": ANALYSIS_VERSION,
     }
