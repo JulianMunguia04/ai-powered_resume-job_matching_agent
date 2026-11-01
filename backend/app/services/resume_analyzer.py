@@ -66,12 +66,12 @@ MONTHS = {
 
 
 DATE_PATTERN = (
-    r"\b("
+    r"(?:"
     r"Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|"
     r"Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|"
     r"Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?"
-    r")\.?\s+\d{4}\b"
-    r"|\b\d{4}\b"
+    r")\.?\s+\d{4}"
+    r"|\b(?:19|20)\d{2}\b"
 )
 
 
@@ -175,10 +175,7 @@ def extract_date_ranges(text):
         start = parse_date_value(start_raw)
         end = parse_date_value(end_raw)
 
-        if not start or not end:
-            continue
-
-        if end < start:
+        if not start or not end or end < start:
             continue
 
         ranges.append({
@@ -415,7 +412,7 @@ def extract_education(sections):
             flags=re.IGNORECASE,
         )
         field = re.sub(r"^\s*in\s+", "", field, flags=re.IGNORECASE)
-        field = clean_line(field.strip(" |,-"))
+        field = clean_line(field.strip(" .|,-"))
 
         if is_incoming:
             status = "incoming"
