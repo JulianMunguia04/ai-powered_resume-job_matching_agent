@@ -495,7 +495,13 @@ def extract_work_experience(sections):
             else len(lines)
         )
 
-        responsibility_lines = lines[line_index + 1:next_date_index]
+        responsibility_end = (
+            next_date_index - 1
+            if position + 1 < len(date_line_indexes)
+            else next_date_index
+        )
+
+        responsibility_lines = lines[line_index + 1:responsibility_end]
 
         # Exclude an employer heading immediately before the next dated role.
         if responsibility_lines:
