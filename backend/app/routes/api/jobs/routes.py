@@ -1,12 +1,15 @@
-# Routes for /jobs
 
-from uuid import uuid4
+from uuid import UUID
 
 from flask import Blueprint, jsonify, request
+
+from services.database import db
+from models import Job, Resume, Embedding
 
 from services.embeddings import embed_text, MODEL_NAME
 from services.job_analyzer import analyze_job
 from services.requirement_matching import match_job_requirements
+
 from services.hybrid_matching import (
     calculate_hybrid_matches,
     rerank_with_cross_encoder,
@@ -16,22 +19,94 @@ from services.hybrid_matching import (
     STRUCTURED_WEIGHT,
 )
 
-from ..resumes.routes import resumes
-
 
 jobs_bp = Blueprint("jobs", __name__)
 
-# Temporary in-memory storage.
-# Records disappear when the server restarts.
-jobs = {}
+
+# Database retrieval helpers
+
+def get_resume_data(resume_id):
+    try:
+        parsed_id = UUID(resume_id)
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+    resume = db.session.get(Resume, parsed_id)
+
+    if resume is None:
+        return None
+
+    embedding_record = resume.embedding_record
+
+    return {
+        "id": str(resume.id),
+        "text": resume.raw_text,
+        "embedding": list(embedding_record.embedding),
+        "embedding_model": embedding_record.model_name,
+        "analysis": resume.analysis,
+    }
+
+
+def get_job_data(job_id):
+    try:
+        parsed_id = UUID(job_id)
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+    job = db.session.get(Job, parsed_id)
+
+    if job is None:
+        return None
+
+    embedding_record = job.embedding_record
+
+    return {
+        "id": str(job.id),
+        "title": job.title,
+        "description": job.description,
+        "embedding": list(embedding_record.embedding),
+        "embedding_model": embedding_record.model_name,
+        "analysis": job.analysis,
+    }
+
+
+def get_all_job_data():
+    records = Job.query.all()
+
+    return {
+        str(job.id): {
+            "id": str(job.id),
+            "title": job.title,
+            "description": job.description,
+            "embedding": list(job.embedding_record.embedding),
+            "embedding_model": job.embedding_record.model_name,
+            "analysis": job.analysis,
+        }
+        for job in records
+    }
+
+
+def public_job(job):
+    return {
+        "id": job["id"],
+        "title": job["title"],
+        "description": job["description"],
+        "embedding_model": job["embedding_model"],
+        "embedding_dimensions": len(job["embedding"])
+    }
 
 
 # GET /jobs
 # Return all stored jobs.
 @jobs_bp.route("/", methods=["GET"])
 def get_all_jobs():
+    jobs = get_all_job_data()
+
     return jsonify({
-        "jobs": [public_job(job) for job in jobs.values()]
+        "jobs": [
+            public_job(job)
+            for job in jobs.values()
+        ]
     }), 200
 
 
@@ -62,40 +137,65 @@ def create_job():
     title = title.strip()
     description = description.strip()
 
-    # Analyze the job description.
-    analysis = analyze_job(description)
+    try:
+        # Analyze the job description.
+        analysis = analyze_job(description)
 
-    job_id = str(uuid4())
+        # Generate an embedding from title and description.
+        text_to_embed = f"{title}\n{description}"
+        embedding_vector = embed_text(text_to_embed)
 
-    # Generate an embedding from the job title and description.
-    text_to_embed = f"{title}\n{description}"
-    embedding = embed_text(text_to_embed)
+        # Store the embedding.
+        embedding_record = Embedding(
+            model_name=MODEL_NAME,
+            dimensions=len(embedding_vector),
+            embedding=embedding_vector
+        )
 
-    job = {
-        "id": job_id,
-        "title": title,
-        "description": description,
-        "embedding": embedding,
-        "embedding_model": MODEL_NAME,
-        "analysis": analysis,
-    }
+        db.session.add(embedding_record)
+        db.session.flush()
 
-    jobs[job_id] = job
+        # Store the job and link it to its embedding.
+        job = Job(
+            embedding_id=embedding_record.id,
+            title=title,
+            description=description,
+            analysis=analysis
+        )
 
-    # Do not send the entire embedding vector to the client.
-    return jsonify({
-        "job": {
-            **public_job(job),
+        db.session.add(job)
+        db.session.commit()
+
+        job_data = {
+            "id": str(job.id),
+            "title": job.title,
+            "description": job.description,
+            "embedding": embedding_vector,
+            "embedding_model": embedding_record.model_name,
             "analysis": analysis,
         }
-    }), 201
+
+        return jsonify({
+            "job": {
+                **public_job(job_data),
+                "analysis": analysis,
+            }
+        }), 201
+
+    except Exception as error:
+        db.session.rollback()
+
+        return jsonify({
+            "error": "Failed to create job.",
+            "details": str(error)
+        }), 500
 
 
 # GET /jobs/<job_id>
 # Return one job by ID.
 @jobs_bp.route("/<job_id>", methods=["GET"])
 def get_job(job_id):
-    job = jobs.get(job_id)
+    job = get_job_data(job_id)
 
     if job is None:
         return jsonify({
@@ -125,7 +225,7 @@ def match_jobs():
             "error": "A non-empty resume_id is required."
         }), 400
 
-    resume = resumes.get(resume_id.strip())
+    resume = get_resume_data(resume_id.strip())
 
     if resume is None:
         return jsonify({
@@ -138,6 +238,7 @@ def match_jobs():
         }), 400
 
     resume_embedding = resume.get("embedding", [])
+    jobs = get_all_job_data()
 
     matches = []
 
@@ -199,14 +300,14 @@ def match_requirements():
             "error": "A non-empty job_id is required."
         }), 400
 
-    resume = resumes.get(resume_id.strip())
+    resume = get_resume_data(resume_id.strip())
 
     if resume is None:
         return jsonify({
             "error": "Resume not found."
         }), 404
 
-    job = jobs.get(job_id.strip())
+    job = get_job_data(job_id.strip())
 
     if job is None:
         return jsonify({
@@ -254,7 +355,7 @@ def hybrid_match():
             "error": "A non-empty resume_id is required."
         }), 400
 
-    resume = resumes.get(resume_id.strip())
+    resume = get_resume_data(resume_id.strip())
 
     if resume is None:
         return jsonify({
@@ -270,6 +371,8 @@ def hybrid_match():
         return jsonify({
             "error": "Resume embedding model does not match."
         }), 400
+
+    jobs = get_all_job_data()
 
     # First, rank all compatible jobs using hybrid matching.
     matches = calculate_hybrid_matches(resume, jobs)
@@ -321,16 +424,14 @@ def compare_resume_to_job():
             "error": "A non-empty job_id is required."
         }), 400
 
-    # Retrieve the selected resume.
-    resume = resumes.get(resume_id.strip())
+    resume = get_resume_data(resume_id.strip())
 
     if resume is None:
         return jsonify({
             "error": "Resume not found."
         }), 404
 
-    # Retrieve the selected job.
-    job = jobs.get(job_id.strip())
+    job = get_job_data(job_id.strip())
 
     if job is None:
         return jsonify({
@@ -373,15 +474,3 @@ def compare_resume_to_job():
         },
         "evaluation": result,
     }), 200
-
-
-# Helper Functions
-
-def public_job(job):
-    return {
-        "id": job["id"],
-        "title": job["title"],
-        "description": job["description"],
-        "embedding_model": job["embedding_model"],
-        "embedding_dimensions": len(job["embedding"])
-    }
