@@ -1,13 +1,15 @@
-from uuid import uuid4
+
+from uuid import UUID
 
 from flask import Blueprint, jsonify, request
 
 from services.embeddings import embed_text, MODEL_NAME
 from services.resume_analyzer import analyze_resume
+from services.database import db
+from models import Resume, Embedding
 
 resumes_bp = Blueprint("resumes", __name__)
 
-resumes = {}
 
 @resumes_bp.route("/", methods=["POST"])
 def create_resume():
@@ -25,43 +27,93 @@ def create_resume():
             "error": "Non-empty resume text is required."
         }), 400
 
-    resume_id = str(uuid4())
     resume_text = text.strip()
-    analysis = analyze_resume(resume_text)
 
-    # Generate the embedding once, when the resume is submitted.
-    embedding = embed_text(resume_text)
+    try:
+        # Analyze the resume.
+        analysis = analyze_resume(resume_text)
 
-    resume = {
-        "id": resume_id,
-        "text": resume_text,
-        "embedding": embedding,
-        "embedding_model": MODEL_NAME,
-        "analysis": analysis,
-    }
+        # Generate its embedding.
+        embedding_vector = embed_text(resume_text)
 
-    resumes[resume_id] = resume
+        # Store the embedding.
+        embedding_record = Embedding(
+            model_name=MODEL_NAME,
+            dimensions=len(embedding_vector),
+            embedding=embedding_vector
+        )
 
-    # Keep the actual vector private.
-    return jsonify({
-        "resume": {
-            "id": resume_id,
-            "embedding_model": MODEL_NAME,
-            "embedding_dimensions": len(embedding),
-            "analysis": analysis,
-        }
-    }), 201
+        db.session.add(embedding_record)
+        db.session.flush()
+
+        # Store the resume and link it to its embedding.
+        resume = Resume(
+            embedding_id=embedding_record.id,
+            raw_text=resume_text,
+            analysis=analysis
+        )
+
+        db.session.add(resume)
+        db.session.commit()
+
+        return jsonify({
+            "resume": {
+                "id": str(resume.id),
+                "embedding_model": embedding_record.model_name,
+                "embedding_dimensions": embedding_record.dimensions,
+                "analysis": analysis
+            }
+        }), 201
+
+    except Exception as error:
+        db.session.rollback()
+
+        return jsonify({
+            "error": "Failed to create resume.",
+            "details": str(error)
+        }), 500
 
 
 @resumes_bp.route("/", methods=["GET"])
 def get_all_resumes():
+    resumes = Resume.query.order_by(
+        Resume.created_at.desc()
+    ).all()
+
     return jsonify({
         "resumes": [
             {
-                "id": resume["id"],
-                "embedding_model": resume["embedding_model"],
-                "embedding_dimensions": len(resume["embedding"]),
+                "id": str(resume.id),
+                "embedding_model": resume.embedding_record.model_name,
+                "embedding_dimensions": resume.embedding_record.dimensions
             }
-            for resume in resumes.values()
+            for resume in resumes
         ]
+    }), 200
+
+
+@resumes_bp.route("/<resume_id>", methods=["GET"])
+def get_resume(resume_id):
+    try:
+        parsed_id = UUID(resume_id)
+    except ValueError:
+        return jsonify({
+            "error": "Resume not found."
+        }), 404
+
+    resume = db.session.get(Resume, parsed_id)
+
+    if resume is None:
+        return jsonify({
+            "error": "Resume not found."
+        }), 404
+
+    return jsonify({
+        "resume": {
+            "id": str(resume.id),
+            "text": resume.raw_text,
+            "embedding_model": resume.embedding_record.model_name,
+            "embedding_dimensions": resume.embedding_record.dimensions,
+            "analysis": resume.analysis
+        }
     }), 200
