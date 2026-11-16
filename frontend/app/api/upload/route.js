@@ -1,9 +1,15 @@
-
 import { NextResponse } from "next/server";
 import mammoth from "mammoth";
-import pdf from "pdf-parse";
+import { createRequire } from "node:module";
+import path from "node:path";
 
-export const runtime = "nodejs";
+const require = createRequire(
+  path.join(process.cwd(), "package.json")
+);
+
+const pdfParse = require("pdf-parse");
+
+process.loadEnvFile('../.env');
 
 export async function POST(request) {
   try {
@@ -40,7 +46,7 @@ export async function POST(request) {
     let extractedText = "";
 
     if (filename.endsWith(".pdf")) {
-      const result = await pdf(buffer);
+      const result = await pdfParse(buffer);
       extractedText = result.text;
     } else if (filename.endsWith(".docx")) {
       const result = await mammoth.extractRawText({ buffer });

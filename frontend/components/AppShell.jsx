@@ -19,22 +19,101 @@ export default function AppShell({ children }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [dragging, setDragging] = useState(false);
 
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [uploadNotice, setUploadNotice] = useState("");
+
   const fileInput = useRef(null);
 
   function openUpload(type) {
     setUploadType(type);
     setSelectedFile(null);
+    setUploadTitle("");
+    setUploadError("");
   }
 
   function closeUpload() {
+    if (isUploading) return;
+
     setUploadType(null);
     setSelectedFile(null);
+    setUploadError("");
+  }
+
+
+  async function submitUpload() {
+    if (!selectedFile || isUploading) return;
+
+    if (uploadType === "Job Description" && !uploadTitle.trim()) {
+      setUploadError("Please enter a job title.");
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError("");
+
+    try {
+      const formData = new FormData();
+
+      formData.append(
+        "type",
+        uploadType === "Resume" ? "resume" : "job"
+      );
+
+      formData.append("file", selectedFile);
+
+      if (uploadType === "Job Description") {
+        formData.append("title", uploadTitle.trim());
+      }
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      // Read the response as text first.
+      const responseText = await response.text();
+
+      console.log("Upload status:", response.status);
+      console.log("Upload response:", responseText);
+
+      // Then safely parse JSON.
+      let data;
+
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(
+          `Invalid server response (${response.status}): ${responseText.slice(0, 300)}`
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || "Upload failed.");
+      }
+
+      setUploadNotice(
+        `${data.filename} was successfully uploaded and analyzed.`
+      );
+
+      setUploadType(null);
+      setSelectedFile(null);
+      setUploadTitle("");
+
+    } catch (error) {
+      console.error("Upload error:", error);
+      setUploadError(error.message);
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   function handleFile(file) {
     if (!file) return;
 
-    const allowedExtensions = [".pdf", ".doc", ".docx", ".txt"];
+    const allowedExtensions = [".pdf", ".docx", ".txt"];
+
     const valid = allowedExtensions.some((extension) =>
       file.name.toLowerCase().endsWith(extension)
     );
@@ -117,6 +196,14 @@ export default function AppShell({ children }) {
           </div>
         </header>
 
+        {uploadNotice && (
+          <div className="upload-success">
+            <span>✓</span>
+            {uploadNotice}
+            <button onClick={() => setUploadNotice("")}>×</button>
+          </div>
+        )}
+
         <div className="page-content">{children}</div>
       </main>
 
@@ -167,11 +254,23 @@ export default function AppShell({ children }) {
                 Job description
               </button>
             </div>
-
+            
+            {uploadType === "Job Description" && (
+              <div className="job-title-field">
+                <label htmlFor="job-title">Job title</label>
+                <input
+                  id="job-title"
+                  type="text"
+                  placeholder="e.g. Junior Software Developer"
+                  value={uploadTitle}
+                  onChange={(event) => setUploadTitle(event.target.value)}
+                />
+              </div>
+            )}
             <input
               ref={fileInput}
               type="file"
-              accept=".pdf,.doc,.docx,.txt"
+              accept=".pdf,.docx,.txt"
               hidden
               onChange={(event) => handleFile(event.target.files?.[0])}
             />
@@ -220,24 +319,35 @@ export default function AppShell({ children }) {
             </div>
 
             <div className="upload-requirements">
-              <span>Supported formats: PDF, DOC, DOCX, TXT</span>
+              <span>Supported formats: PDF, DOCX, TXT</span>
               <span>Maximum file size: 10 MB</span>
             </div>
 
+            {uploadError && (
+              <div className="upload-error">
+                {uploadError}
+              </div>
+            )}
+
             <div className="modal-actions">
-              <button className="cancel-button" onClick={closeUpload}>
+              <button
+                className="cancel-button"
+                onClick={closeUpload}
+                disabled={isUploading}
+              >
                 Cancel
               </button>
+
               <button
                 className="confirm-upload"
-                disabled={!selectedFile}
-                onClick={() => {
-                  alert(
-                    "The upload interface is ready. We will connect this to the Flask API next."
-                  );
-                }}
+                disabled={
+                  !selectedFile ||
+                  isUploading ||
+                  (uploadType === "Job Description" && !uploadTitle.trim())
+                }
+                onClick={submitUpload}
               >
-                Continue
+                {isUploading ? "Processing document..." : "Upload document"}
               </button>
             </div>
           </section>

@@ -9,7 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "mammoth": "^1.13.0",
     "next": "16.4.3",
+    "pdf-parse": "^1.1.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-router": "^7.18.5"

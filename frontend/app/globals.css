@@ -1016,3 +1016,81 @@ a {
     width: 215px;
   }
 }
+
+
+/* DOCUMENT UPLOAD FORM */
+
+.job-title-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.job-title-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.job-title-field input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  outline: none;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.job-title-field input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px #2563eb15;
+}
+
+.upload-error {
+  margin-top: 15px;
+  padding: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.upload-success {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 42px 0;
+  padding: 14px 16px;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 12px;
+}
+
+.upload-success span {
+  font-weight: 700;
+}
+
+.upload-success button {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: #047857;
+  font-size: 20px;
+}
+
+.confirm-upload:disabled,
+.cancel-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 750px) {
+  .upload-success {
+    margin: 15px 17px 0;
+  }
+}
