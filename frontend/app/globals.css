@@ -72,15 +72,10 @@ a {
 }
 
 .brand-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
-  background: var(--blue);
-  color: white;
-  display: grid;
-  place-items: center;
-  font-size: 21px;
-  font-weight: 800;
+  height: 36px;  
+  width: auto;      
+  object-fit: contain;
+  border-radius: 6px;  
 }
 
 .brand h2 {
@@ -1093,4 +1088,31 @@ a {
   .upload-success {
     margin: 15px 17px 0;
   }
+}
+
+.brand-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  object-fit: contain;
+}
+
+.topbar {
+  position: relative;
+}
+
+.topbar-logo-container {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  height: 65
+}
+
+.topbar-logo {
+  height: 100%;   
+  width: auto; 
+  object-fit: contain;
+  border-radius: 5px
 }

@@ -3,7 +3,7 @@ import "./globals.css";
 import AppShell from "../components/AppShell";
 
 export const metadata = {
-  title: "TalentMatch | Recruitment Intelligence",
+  title: "MatchPilot.ai | Recruitment Intelligence",
   description: "AI-powered recruitment screening and resume matching.",
 };
 

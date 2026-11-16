@@ -130,9 +130,9 @@ export default function AppShell({ children }) {
     <div className="app-shell">
       <aside className="sidebar">
         <Link href="/" className="brand">
-          <div className="brand-icon">T</div>
+          <img src="/logo-square.png" alt="MatchPilot.ai Logo" className="brand-icon" />
           <div>
-            <h2>TalentMatch</h2>
+            <h2>MatchPilot.ai</h2>
             <span>Recruitment Intelligence</span>
           </div>
         </Link>
@@ -175,6 +175,11 @@ export default function AppShell({ children }) {
               {navigation.find((item) => item.href === pathname)?.label ||
                 "Dashboard"}
             </strong>
+          </div>
+
+          {/* Rectangle logo centered in the header */}
+          <div className="topbar-logo-container">
+            <img src="/logo.png" alt="MatchPilot.ai" className="topbar-logo" />
           </div>
 
           <div className="upload-wrapper">
