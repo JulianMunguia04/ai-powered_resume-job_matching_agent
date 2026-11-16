@@ -100,12 +100,25 @@ def public_job(job):
 # Return all stored jobs.
 @jobs_bp.route("/", methods=["GET"])
 def get_all_jobs():
-    jobs = get_all_job_data()
+    total = Job.query.count()
+
+    jobs = Job.query.order_by(
+        Job.created_at.desc()
+    ).all()
 
     return jsonify({
+        "success": True,
+        "total": total,
         "jobs": [
-            public_job(job)
-            for job in jobs.values()
+            {
+                "id": str(job.id),
+                "title": job.title,
+                "description": job.description,
+                "embedding_model": job.embedding_record.model_name,
+                "embedding_dimensions": job.embedding_record.dimensions,
+                "created_at": job.created_at.isoformat()
+            }
+            for job in jobs
         ]
     }), 200
 
