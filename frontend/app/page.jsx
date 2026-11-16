@@ -61,7 +61,7 @@ export default function Home() {
         <div className="brand">
           <div className="brand-icon">T</div>
           <div>
-            <h2>TalentMatch</h2>
+            <h2>MatchPilotAI</h2>
             <span>Recruitment Intelligence</span>
           </div>
         </div>
