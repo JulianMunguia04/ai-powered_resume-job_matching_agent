@@ -6,11 +6,15 @@ from .jobs import jobs_bp
 
 from .resumes import resumes_bp
 
+from .matches import matches_bp
+
 api_bp = Blueprint('api', __name__)
 
 api_bp.register_blueprint(jobs_bp, url_prefix='/jobs')
 
 api_bp.register_blueprint(resumes_bp, url_prefix='/resumes')
+
+api_bp.register_blueprint(matches_bp, url_prefix='/matches')
 
 
 
