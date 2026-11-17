@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -24,11 +23,9 @@ export default function ResumesPage() {
       setResumes(data.resumes || []);
       setTotal(data.total ?? data.resumes?.length ?? 0);
       setError("");
-
     } catch (err) {
       console.error("Resumes loading error:", err);
       setError(err.message || "Unable to load resumes.");
-
     } finally {
       setLoading(false);
     }
@@ -124,26 +121,58 @@ export default function ResumesPage() {
           </div>
         ) : (
           <div className="document-list">
-            {resumes.map((resume) => (
-              <article className="document-card mt-4" key={resume.id}>
-                <div className="document-card-header">
-                  <div>
-                    <h3>Candidate Resume</h3>
-                    <p>Added {formatDate(resume.created_at)}</p>
+            {resumes.map((resume) => {
+              const skills = resume.analysis?.skills || [];
+              const visibleSkills = skills.slice(0, 3);
+              const remainingSkills = Math.max(0, skills.length - 3);
+
+              return (
+                <article className="document-card" key={resume.id}>
+                  <div className="document-card-header">
+                    <div className="document-card-title">
+                      <h3>{resume.candidate_name || "Candidate Resume"}</h3>
+                      <p>Added {formatDate(resume.created_at)}</p>
+                    </div>
+
+                    <span
+                      className={`document-status ${
+                        resume.is_analyzed ? "success" : "pending"
+                      }`}
+                    >
+                      {resume.is_analyzed ? "Analyzed" : "Pending"}
+                    </span>
                   </div>
 
-                  <span className={`document-status ${
-                    resume.is_analyzed ? "success" : "pending"
-                  }`}>
-                    {resume.is_analyzed ? "Analyzed" : "Pending"}
-                  </span>
-                </div>
+                  <p className="document-description">
+                    {resume.raw_text || "No resume summary available."}
+                  </p>
 
-                <span className="document-id">
-                  ID: {resume.id}
-                </span>
-              </article>
-            ))}
+                  <div className="document-skills">
+                    {visibleSkills.map((skill, index) => {
+                      const label =
+                        typeof skill === "string" ? skill : skill.name;
+                      return (
+                        <span className="skill-tag" key={`${label}-${index}`}>
+                          {label}
+                        </span>
+                      );
+                    })}
+
+                    {remainingSkills > 0 && (
+                      <span className="skill-tag skill-more">
+                        +{remainingSkills}
+                      </span>
+                    )}
+
+                    {skills.length === 0 && (
+                      <span className="no-skills">No skills detected</span>
+                    )}
+                  </div>
+
+                  <span className="document-id">ID: {resume.id}</span>
+                </article>
+              );
+            })}
           </div>
         )}
       </section>

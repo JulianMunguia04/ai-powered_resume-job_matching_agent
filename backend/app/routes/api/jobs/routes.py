@@ -116,7 +116,10 @@ def get_all_jobs():
                 "description": job.description,
                 "embedding_model": job.embedding_record.model_name,
                 "embedding_dimensions": job.embedding_record.dimensions,
-                "created_at": job.created_at.isoformat()
+                "created_at": job.created_at.isoformat(),
+                "is_analyzed": bool(job.analysis),
+                "analysis": job.analysis,
+                "raw_text": job.raw_text
             }
             for job in jobs
         ]

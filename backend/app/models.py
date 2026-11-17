@@ -44,6 +44,7 @@ class Resume(db.Model):
         unique=True
     )
 
+    candidate_name = db.Column(db.String(255), nullable=True)
     raw_text = db.Column(db.Text, nullable=False)
     analysis = db.Column(JSONB, nullable=False)
 

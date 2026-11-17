@@ -18,6 +18,7 @@ export async function POST(request) {
     const type = formData.get("type");
     const file = formData.get("file");
     const title = formData.get("title");
+    const candidateName = formData.get("candidateName");
 
     if (!["resume", "job"].includes(type)) {
       return NextResponse.json(
@@ -80,7 +81,15 @@ export async function POST(request) {
 
     if (type === "resume") {
       endpoint = "/api/resumes/";
+      if (!candidateName || !candidateName.trim()) {
+        return NextResponse.json(
+          { error: "A candidate name is required." },
+          { status: 400 }
+        );
+      }
+
       payload = {
+        candidate_name: candidateName.trim(),
         text: extractedText,
       };
     } else {

@@ -20,14 +20,21 @@ def create_resume():
             "error": "Request body must be a JSON object."
         }), 400
 
-    text = data.get("text")
+    candidate_name = data.get("candidate_name")
+    resume_text = data.get("text")
 
-    if not isinstance(text, str) or not text.strip():
+    if not isinstance(candidate_name, str) or not candidate_name.strip():
         return jsonify({
-            "error": "Non-empty resume text is required."
+            "error": "A candidate name is required."
         }), 400
 
-    resume_text = text.strip()
+    if not isinstance(resume_text, str) or not resume_text.strip():
+        return jsonify({
+            "error": "Resume text is required."
+        }), 400
+
+    candidate_name = candidate_name.strip()
+    resume_text = resume_text.strip()
 
     try:
         # Analyze the resume.
@@ -49,6 +56,7 @@ def create_resume():
         # Store the resume and link it to its embedding.
         resume = Resume(
             embedding_id=embedding_record.id,
+            candidate_name = candidate_name,
             raw_text=resume_text,
             analysis=analysis
         )
@@ -61,6 +69,7 @@ def create_resume():
                 "id": str(resume.id),
                 "embedding_model": embedding_record.model_name,
                 "embedding_dimensions": embedding_record.dimensions,
+                "candidate_name": resume.candidate_name,
                 "analysis": analysis
             }
         }), 201
@@ -76,16 +85,25 @@ def create_resume():
 
 @resumes_bp.route("/", methods=["GET"])
 def get_all_resumes():
+    total = Resume.query.count()
+
     resumes = Resume.query.order_by(
         Resume.created_at.desc()
     ).all()
 
     return jsonify({
+        "success": True,
+        "total": total,
         "resumes": [
             {
                 "id": str(resume.id),
+                "candidate_name": resume.candidate_name,
                 "embedding_model": resume.embedding_record.model_name,
-                "embedding_dimensions": resume.embedding_record.dimensions
+                "embedding_dimensions": resume.embedding_record.dimensions,
+                "created_at": resume.created_at.isoformat(),
+                "is_analyzed": bool(resume.analysis),
+                "analysis": resume.analysis,
+                "raw_text": resume.raw_text
             }
             for resume in resumes
         ]
@@ -114,6 +132,7 @@ def get_resume(resume_id):
             "text": resume.raw_text,
             "embedding_model": resume.embedding_record.model_name,
             "embedding_dimensions": resume.embedding_record.dimensions,
-            "analysis": resume.analysis
+            "analysis": resume.analysis,
+            "candidate_name": resume.candidate_name
         }
     }), 200

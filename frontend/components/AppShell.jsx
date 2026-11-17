@@ -20,6 +20,7 @@ export default function AppShell({ children }) {
   const [dragging, setDragging] = useState(false);
 
   const [uploadTitle, setUploadTitle] = useState("");
+  const [candidateName, setCandidateName] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadNotice, setUploadNotice] = useState("");
@@ -30,7 +31,9 @@ export default function AppShell({ children }) {
     setUploadType(type);
     setSelectedFile(null);
     setUploadTitle("");
+    setCandidateName("");
     setUploadError("");
+    setDragging(false);
   }
 
   function closeUpload() {
@@ -38,15 +41,31 @@ export default function AppShell({ children }) {
 
     setUploadType(null);
     setSelectedFile(null);
+    setUploadTitle("");
+    setCandidateName("");
     setUploadError("");
+    setDragging(false);
   }
 
+  function switchUploadType(type) {
+    setUploadType(type);
+    setSelectedFile(null);
+    setUploadTitle("");
+    setCandidateName("");
+    setUploadError("");
+    setDragging(false);
+  }
 
   async function submitUpload() {
     if (!selectedFile || isUploading) return;
 
     if (uploadType === "Job Description" && !uploadTitle.trim()) {
       setUploadError("Please enter a job title.");
+      return;
+    }
+
+    if (uploadType === "Resume" && !candidateName.trim()) {
+      setUploadError("Please enter the candidate's name.");
       return;
     }
 
@@ -67,18 +86,20 @@ export default function AppShell({ children }) {
         formData.append("title", uploadTitle.trim());
       }
 
+      if (uploadType === "Resume") {
+        formData.append("candidateName", candidateName.trim());
+      }
+
       const response = await fetch("/api/upload", {
         method: "POST",
         body: formData,
       });
 
-      // Read the response as text first.
       const responseText = await response.text();
 
       console.log("Upload status:", response.status);
       console.log("Upload response:", responseText);
 
-      // Then safely parse JSON.
       let data;
 
       try {
@@ -102,6 +123,8 @@ export default function AppShell({ children }) {
       setUploadType(null);
       setSelectedFile(null);
       setUploadTitle("");
+      setCandidateName("");
+      setUploadError("");
 
     } catch (error) {
       console.error("Upload error:", error);
@@ -121,18 +144,23 @@ export default function AppShell({ children }) {
     );
 
     if (!valid) {
-      alert("Please select a PDF, DOC, DOCX, or TXT file.");
+      alert("Please select a PDF, DOCX, or TXT file.");
       return;
     }
 
     setSelectedFile(file);
+    setUploadError("");
   }
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <Link href="/" className="brand">
-          <img src="/logo-square.png" alt="MatchPilot.ai Logo" className="brand-icon" />
+          <img
+            src="/logo-square.png"
+            alt="MatchPilot.ai Logo"
+            className="brand-icon"
+          />
           <div>
             <h2>MatchPilot.ai</h2>
             <span>Recruitment Intelligence</span>
@@ -179,9 +207,12 @@ export default function AppShell({ children }) {
             </strong>
           </div>
 
-          {/* Rectangle logo centered in the header */}
           <div className="topbar-logo-container">
-            <img src="/logo.png" alt="MatchPilot.ai" className="topbar-logo" />
+            <img
+              src="/logo.png"
+              alt="MatchPilot.ai"
+              className="topbar-logo"
+            />
           </div>
 
           <div className="upload-wrapper">
@@ -241,10 +272,7 @@ export default function AppShell({ children }) {
             <div className="upload-type-selector">
               <button
                 className={uploadType === "Resume" ? "selected" : ""}
-                onClick={() => {
-                  setUploadType("Resume");
-                  setSelectedFile(null);
-                }}
+                onClick={() => switchUploadType("Resume")}
               >
                 Resume
               </button>
@@ -253,15 +281,25 @@ export default function AppShell({ children }) {
                 className={
                   uploadType === "Job Description" ? "selected" : ""
                 }
-                onClick={() => {
-                  setUploadType("Job Description");
-                  setSelectedFile(null);
-                }}
+                onClick={() => switchUploadType("Job Description")}
               >
                 Job description
               </button>
             </div>
-            
+
+            {uploadType === "Resume" && (
+              <div className="job-title-field">
+                <label htmlFor="candidate-name">Candidate name</label>
+                <input
+                  id="candidate-name"
+                  type="text"
+                  placeholder="e.g. Jane Smith"
+                  value={candidateName}
+                  onChange={(event) => setCandidateName(event.target.value)}
+                />
+              </div>
+            )}
+
             {uploadType === "Job Description" && (
               <div className="job-title-field">
                 <label htmlFor="job-title">Job title</label>
@@ -274,6 +312,7 @@ export default function AppShell({ children }) {
                 />
               </div>
             )}
+
             <input
               ref={fileInput}
               type="file"
@@ -350,7 +389,8 @@ export default function AppShell({ children }) {
                 disabled={
                   !selectedFile ||
                   isUploading ||
-                  (uploadType === "Job Description" && !uploadTitle.trim())
+                  (uploadType === "Job Description" && !uploadTitle.trim()) ||
+                  (uploadType === "Resume" && !candidateName.trim())
                 }
                 onClick={submitUpload}
               >
