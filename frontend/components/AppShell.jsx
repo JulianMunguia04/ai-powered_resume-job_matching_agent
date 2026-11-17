@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -12,7 +12,7 @@ const navigation = [
   { label: "Matching", href: "/matching", icon: "⌕" },
 ];
 
-export default function AppShell({ children }) {
+function AppShellContent({ children }) {
   const pathname = usePathname();
 
   const [uploadType, setUploadType] = useState(null);
@@ -401,5 +401,21 @@ export default function AppShell({ children }) {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AppShell({ children }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="app-shell">
+          <main className="main-content">
+            <div className="page-content">{children}</div>
+          </main>
+        </div>
+      }
+    >
+      <AppShellContent>{children}</AppShellContent>
+    </Suspense>
   );
 }

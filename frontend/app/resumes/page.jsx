@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useCallback, useEffect, useState } from "react";
 
 export default function ResumesPage() {
@@ -127,7 +129,11 @@ export default function ResumesPage() {
               const remainingSkills = Math.max(0, skills.length - 3);
 
               return (
-                <article className="document-card" key={resume.id}>
+                <Link
+                  href={`/resumes/${resume.id}`}
+                  className="document-card document-card-link"
+                  key={resume.id}
+                >
                   <div className="document-card-header">
                     <div className="document-card-title">
                       <h3>{resume.candidate_name || "Candidate Resume"}</h3>
@@ -144,13 +150,14 @@ export default function ResumesPage() {
                   </div>
 
                   <p className="document-description">
-                    {resume.raw_text || "No resume summary available."}
+                    {resume.raw_text || "No resume text available."}
                   </p>
 
                   <div className="document-skills">
                     {visibleSkills.map((skill, index) => {
                       const label =
                         typeof skill === "string" ? skill : skill.name;
+
                       return (
                         <span className="skill-tag" key={`${label}-${index}`}>
                           {label}
@@ -170,7 +177,7 @@ export default function ResumesPage() {
                   </div>
 
                   <span className="document-id">ID: {resume.id}</span>
-                </article>
+                </Link>
               );
             })}
           </div>

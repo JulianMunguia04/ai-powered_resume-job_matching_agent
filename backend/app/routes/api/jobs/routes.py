@@ -119,7 +119,7 @@ def get_all_jobs():
                 "created_at": job.created_at.isoformat(),
                 "is_analyzed": bool(job.analysis),
                 "analysis": job.analysis,
-                "raw_text": job.raw_text
+                "raw_text": job.description
             }
             for job in jobs
         ]
@@ -211,7 +211,14 @@ def create_job():
 # Return one job by ID.
 @jobs_bp.route("/<job_id>", methods=["GET"])
 def get_job(job_id):
-    job = get_job_data(job_id)
+    try:
+        parsed_id = UUID(job_id)
+    except (ValueError, TypeError, AttributeError):
+        return jsonify({
+            "error": "Job not found."
+        }), 404
+
+    job = db.session.get(Job, parsed_id)
 
     if job is None:
         return jsonify({
@@ -219,7 +226,16 @@ def get_job(job_id):
         }), 404
 
     return jsonify({
-        "job": public_job(job)
+        "job": {
+            "id": str(job.id),
+            "title": job.title,
+            "description": job.description,
+            "raw_text": job.description,
+            "analysis": job.analysis,
+            "embedding_model": job.embedding_record.model_name,
+            "embedding_dimensions": job.embedding_record.dimensions,
+            "created_at": job.created_at.isoformat()
+        }
     }), 200
 
 

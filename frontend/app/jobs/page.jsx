@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useCallback, useEffect, useState } from "react";
 
 export default function JobsPage() {
@@ -124,7 +126,11 @@ export default function JobsPage() {
               const remainingSkills = Math.max(0, skills.length - 3);
 
               return (
-                <article className="document-card" key={job.id}>
+                <Link
+                  href={`/jobs/${job.id}`}
+                  className="document-card document-card-link"
+                  key={job.id}
+                >
                   <div className="document-card-header">
                     <div className="document-card-title">
                       <h3>{job.title}</h3>
@@ -174,7 +180,7 @@ export default function JobsPage() {
                   </div>
 
                   <span className="document-id">ID: {job.id}</span>
-                </article>
+                </Link>
               );
             })}
           </div>
