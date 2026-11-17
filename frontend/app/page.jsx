@@ -1,7 +1,52 @@
 
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 export default function Dashboard() {
+  const [resumeCount, setResumeCount] = useState(null);
+  const [jobCount, setJobCount] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [statsError, setStatsError] = useState(false);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const response = await fetch("/api/stats", {
+        cache: "no-store"
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load statistics.");
+      }
+
+      setResumeCount(data.resumes);
+      setJobCount(data.jobs);
+      setStatsError(false);
+
+    } catch (error) {
+      console.error("Dashboard statistics error:", error);
+      setStatsError(true);
+
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Load counts when the dashboard opens.
+    fetchStats();
+
+    // Refresh counts after a successful document upload.
+    window.addEventListener("workspace-data-updated", fetchStats);
+
+    return () => {
+      window.removeEventListener("workspace-data-updated", fetchStats);
+    };
+  }, [fetchStats]);
+
   return (
     <div className="dashboard-container">
       <section className="welcome-section">
@@ -18,13 +63,17 @@ export default function Dashboard() {
       <section className="stats-grid">
         <Link href="/resumes" className="stat-card">
           <span className="stat-caption">CANDIDATES</span>
-          <h2>0</h2>
+          <h2>
+            {loading ? "..." : statsError ? "—" : resumeCount}
+          </h2>
           <p>Resumes uploaded</p>
         </Link>
 
         <Link href="/jobs" className="stat-card">
           <span className="stat-caption">POSITIONS</span>
-          <h2>0</h2>
+          <h2>
+            {loading ? "..." : statsError ? "—" : jobCount}
+          </h2>
           <p>Job descriptions</p>
         </Link>
 
@@ -34,6 +83,12 @@ export default function Dashboard() {
           <p>Matches generated</p>
         </Link>
       </section>
+
+      {statsError && (
+        <p role="alert">
+          Unable to load dashboard statistics. Please refresh the page.
+        </p>
+      )}
 
       <section className="section-heading">
         <div>

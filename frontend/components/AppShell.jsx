@@ -93,6 +93,8 @@ export default function AppShell({ children }) {
         throw new Error(data.error || "Upload failed.");
       }
 
+      window.dispatchEvent(new Event("workspace-data-updated"));
+
       setUploadNotice(
         `${data.filename} was successfully uploaded and analyzed.`
       );
