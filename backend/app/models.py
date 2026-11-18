@@ -98,3 +98,69 @@ class Job(db.Model):
     )
 
     embedding_record = db.relationship("Embedding")
+
+
+class Matching(db.Model):
+    __tablename__ = "matchings"
+
+    id = db.Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    resume_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey("resumes.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    job_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey("jobs.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    # Human-readable LLM explanation.
+    text = db.Column(db.Text, nullable=False)
+
+    # Structured LLM output: skills, strengths, gaps, etc.
+    analysis = db.Column(JSONB, nullable=False)
+
+    # Scores from the matching pipeline.
+    scores = db.Column(JSONB, nullable=False)
+
+    # Document versions used to generate this match.
+    resume_updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False
+    )
+
+    job_updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )
+
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False
+    )
+
+    resume = db.relationship("Resume")
+    job = db.relationship("Job")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "resume_id",
+            "job_id",
+            name="uq_matching_resume_job"
+        ),
+    )
