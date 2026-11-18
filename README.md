@@ -1,8 +1,8 @@
-# 🤖 AI-Powered Resume & Job Matching Agent
+# 🤖 MatchPilot.ai — AI-Powered Resume & Job Matching Agent
 
-A full-stack, production-style recruitment assistant that combines transformer-based semantic matching, LLM agentic workflows, and cloud-native infrastructure to help users interpret resume–job alignment — without ever making the final hiring decision.
+A full-stack, cloud-hosted AI recruitment assistant that combines transformer-based semantic matching, hybrid ranking (Sentence-BERT + BM25 + structured requirement matching + Cross-Encoder reranking), LLM-generated explanations, and production-style infrastructure — built with transparency, evidence, and human oversight as first-class concerns.
 
-This project implements Sentence-BERT semantic similarity, a controlled LLM agent (planning, tool calling, verification, human escalation), Redis-backed caching and rate limiting, Docker containerization, and AWS deployment — built with transparency, privacy, and human oversight as first-class concerns.
+This project implements Sentence-BERT semantic similarity, BM25 keyword relevance, structured requirement-level matching, Cross-Encoder reranking, a controlled LLM explanation layer (OpenAI structured outputs), Redis-backed caching and rate limiting, PostgreSQL + pgvector persistence, Docker containerization, and AWS (ECS/Fargate) deployment.
 
 IT452 Project Capstone
 
@@ -13,54 +13,59 @@ IT452 Project Capstone
 ![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white&style=for-the-badge)
 ![Flask](https://img.shields.io/badge/Flask-000000?logo=flask&logoColor=white&style=for-the-badge)
 ![React](https://img.shields.io/badge/React-61DAFB?logo=react&logoColor=black&style=for-the-badge)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white&style=for-the-badge)
 ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white&style=for-the-badge)
 ![Hugging Face](https://img.shields.io/badge/Hugging%20Face-FFD21E?logo=huggingface&logoColor=black&style=for-the-badge)
-![Anthropic](https://img.shields.io/badge/Anthropic%20Claude-D4A27F?logo=anthropic&logoColor=white&style=for-the-badge)
+![OpenAI](https://img.shields.io/badge/OpenAI-412991?logo=openai&logoColor=white&style=for-the-badge)
 ![Redis](https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white&style=for-the-badge)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white&style=for-the-badge)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white&style=for-the-badge)
 ![AWS](https://img.shields.io/badge/AWS-232F3E?logo=amazonaws&logoColor=white&style=for-the-badge)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white&style=for-the-badge)
-
 
 ---
 
 ## 🧩 System Design
 
-This diagram represents the high-level architecture of the AI-powered resume and job matching platform, including the request flow, agentic workflow, semantic matching engine, caching layer, and cloud deployment.
+MatchPilot.ai is organized as a React frontend backed by a Flask API, with a hybrid matching engine and an LLM explanation layer sitting on top of persistent storage.
 
 ### Overview
 
-- Users upload resumes and job descriptions through the React frontend (PDF/DOCX)
-- The Flask backend validates requests and coordinates application services
+- Users upload resumes and job descriptions through the React frontend (TXT, DOCX, PDF)
+- The Flask backend validates requests and coordinates the matching pipeline
 - Documents are parsed and normalized (skills, experience, education) using NLP (spaCy / NLTK)
-- A Sentence-BERT model generates embeddings for semantic similarity scoring
-- The agent orchestrator plans tasks, calls tools, maintains workflow state, and verifies outputs
-- An LLM integration service (Anthropic Claude, provider-abstracted) generates structured explanations and skill-gap analyses
-- Redis caches embeddings/matches and enforces rate limits on expensive endpoints
-- A verification module checks schemas, required fields, evidence references, and unsupported claims
-- Uncertain or high-impact cases are escalated to human review
+- A Sentence-BERT model generates 384-dimensional embeddings for semantic similarity scoring
+- BM25 computes keyword relevance across the job collection
+- A structured requirement matching service checks each job requirement against resume evidence
+- A weighted hybrid score combines the three signals (Semantic 35%, BM25 25%, Structured 40%)
+- A Cross-Encoder reranks the top candidates by evaluating each resume–job pair jointly
+- An LLM explanation service (OpenAI, structured JSON outputs) generates match summaries, matching/missing skills, strengths, gaps, and recommendations
+- PostgreSQL + pgvector persists resumes, jobs, embeddings, and match explanations
+- Redis caches embeddings and match results and enforces rate limits
+- Human-review and explainability are preserved throughout: the system assists, it never makes final hiring decisions
 - The application is containerized with Docker and deployed to AWS (ECS/Fargate)
-
-This design mirrors production-grade AI systems that combine deterministic ML pipelines with controlled LLM agents and responsible AI safeguards.
 
 ---
 
 ## 🚀 Features
 
-- Semantic matching with Sentence-BERT embeddings + similarity scoring
-- LLM agentic workflow (task planning, tool calling, state management, verification)
-- Structured, schema-validated LLM outputs with deterministic checks
-- Human-review escalation path for uncertain or high-impact cases
+- Semantic matching with Sentence-BERT embeddings + cosine similarity
+- BM25 keyword relevance scoring across the job collection
+- Structured requirement-level matching with per-requirement evidence status
+- Cross-Encoder reranking of hybrid results
+- Weighted hybrid scoring (Semantic 35% / BM25 25% / Structured 40%)
+- LLM-generated explanations with structured, schema-validated JSON output
 - Explainable results: match scores, evidence, detected skill gaps, and limitations
-- Provider-abstracted LLM interface (Claude primary; OpenAI/Gemini fallback)
-- Redis caching for embeddings, document processing, and match results
+- Distinguishes skills listed vs. skills demonstrated in projects or employment
+- Persistent storage of resumes, jobs, embeddings, and match explanations (PostgreSQL + pgvector)
+- Redis caching for embeddings and repeated match results
 - Redis-based API rate limiting and cost controls
 - Secure environment-based API key handling (no user-supplied keys)
 - Prompt injection defenses and input validation
-- Flask backend + React frontend with a minimal-training-overhead UI
+- Flask backend + React (TypeScript) frontend
+- Dynamic Resume and Job detail pages with individual and comparison views
 - Dockerized multi-service environment via Docker Compose
 - AWS deployment (ECS/Fargate) for reproducible, remote access
-- Mixed-methods evaluation: precision@k, MRR, workflow reliability, latency, cache hit ratio, usability
+- Mixed-methods evaluation: matching quality, agent reliability, latency, cache hit ratio, usability
 
 ---
 
@@ -81,15 +86,24 @@ ai-resume-matcher/
 │   ├── requirements.txt
 │   ├── app.py
 │   │
-│   ├── api/
-│   │   ├── routes.py
+│   ├── routes/
+│   │   ├── api/
+│   │   │   ├── jobs/routes.py
+│   │   │   ├── resumes/routes.py
+│   │   │   └── matches/routes.py
 │   │   └── schemas.py
 │   │
 │   ├── services/
 │   │   ├── document_parser.py
 │   │   ├── nlp_preprocessor.py
+│   │   ├── embedding_service.py
 │   │   ├── semantic_matcher.py
-│   │   ├── agent_orchestrator.py
+│   │   ├── skill_extraction.py
+│   │   ├── resume_analyzer.py
+│   │   ├── job_analyzer.py
+│   │   ├── requirement_matching.py
+│   │   ├── hybrid_matching.py
+│   │   ├── cross_encoder.py
 │   │   ├── llm_service.py
 │   │   └── verification.py
 │   │
@@ -107,6 +121,10 @@ ai-resume-matcher/
 │   └── src/
 │       ├── components/
 │       ├── pages/
+│       │   ├── Dashboard
+│       │   ├── Resumes
+│       │   ├── Jobs
+│       │   └── Matching
 │       └── api/
 │
 ├── deployments/
@@ -128,6 +146,8 @@ ai-resume-matcher/
     └── evaluation.md
 ```
 
+---
+
 ## ⚙️ Configuration
 
 ### Example `.env`
@@ -137,9 +157,12 @@ FLASK_ENV=development
 SECRET_KEY=change-me
 
 # LLM Provider (never commit real keys)
-LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-xxxxxxxx
-LLM_MODEL=claude-sonnet
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-xxxxxxxx
+LLM_MODEL=gpt-4o-mini
+
+# Hugging Face (Cross-Encoder model access)
+HUGGINGFACE_TOKEN=hf_xxxxxxxx
 
 # Database
 DATABASE_URL=postgresql://user:pass@db:5432/resume_matcher
@@ -159,13 +182,75 @@ RATE_LIMIT_WINDOW_SECONDS=60
 Create a `.env` file (never commit it):
 
 ```env
-ANTHROPIC_API_KEY=sk-ant-xxxxxxxx
+OPENAI_API_KEY=sk-xxxxxxxx
+HUGGINGFACE_TOKEN=hf_xxxxxxxx
 DATABASE_URL=postgresql://user:pass@db:5432/resume_matcher
 REDIS_URL=redis://redis:6379/0
 SECRET_KEY=change-me
 ```
 
 > API credentials are stored via environment variables or a secrets manager and are never hardcoded in source control. End users are **never** asked to supply their own LLM keys.
+
+---
+
+## 🗄 Database (PostgreSQL + pgvector)
+
+Embeddings are stored as native `VECTOR(384)` columns with pgvector.
+
+```sql
+-- Enable UUID generation and vector support
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- 1. Embeddings
+CREATE TABLE embeddings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    model VARCHAR(255) NOT NULL,
+    dimensions INTEGER NOT NULL,
+    embedding VECTOR(384) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT valid_embedding_dimensions CHECK (dimensions = 384)
+);
+
+-- 2. Resumes
+CREATE TABLE resumes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    embedding_id UUID NOT NULL UNIQUE REFERENCES embeddings(id) ON DELETE RESTRICT,
+    raw_text TEXT NOT NULL,
+    analysis JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 3. Jobs
+CREATE TABLE jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    embedding_id UUID NOT NULL UNIQUE REFERENCES embeddings(id) ON DELETE RESTRICT,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    analysis JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 4. Matches
+CREATE TABLE matches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    resume_id UUID NOT NULL REFERENCES resumes(id),
+    job_id UUID NOT NULL REFERENCES jobs(id),
+    text TEXT NOT NULL,
+    analysis JSONB NOT NULL,
+    scores JSONB NOT NULL,
+    resume_updated_at TIMESTAMPTZ NOT NULL,
+    job_updated_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_resumes_created_at ON resumes(created_at);
+CREATE INDEX idx_jobs_created_at ON jobs(created_at);
+CREATE INDEX idx_matches_resume_id ON matches(resume_id);
+CREATE INDEX idx_matches_job_id ON matches(job_id);
+```
 
 ---
 
@@ -206,7 +291,7 @@ services:
       - app-network
 
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pass
@@ -239,7 +324,7 @@ cd ai-resume-matcher
 
 ```bash
 cp .env.example .env
-# add your API key and database credentials
+# add your API keys and database credentials
 ```
 
 ### 3. Start everything
@@ -257,21 +342,69 @@ Backend API: http://localhost:5000
 
 ---
 
+## 🔌 API Endpoints
+
+### Resumes
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/resumes/` | Upload and store a resume |
+| GET | `/api/resumes/` | List all resumes |
+| GET | `/api/resumes/<resume_id>` | Retrieve a single resume |
+
+### Jobs
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/jobs` | Create and store a job |
+| GET | `/api/jobs` | List all jobs |
+| GET | `/api/jobs/<job_id>` | Retrieve a single job |
+
+### Matching
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/jobs/match` | Basic Sentence-BERT ranking against all jobs |
+| POST | `/api/jobs/match-requirements` | Requirement-level evidence for one resume vs. one job |
+| POST | `/api/jobs/hybrid-match` | Hybrid ranking of all jobs for one resume (Semantic + BM25 + Structured + Cross-Encoder rerank) |
+| POST | `/api/jobs/compare` | Detailed evaluation of one resume vs. one job |
+
+### Matches (Persisted LLM Explanations)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/matches/resumes/<resume_id>` | Top jobs for a resume |
+| GET | `/api/matches/jobs/<job_id>` | Top applicants for a job |
+| GET | `/api/matches/` | All saved match explanations |
+| GET | `/api/matches/<matching_id>` | One saved explanation |
+
+---
+
 ## 🧪 Testing
 
-### Upload a resume and job description
+### Upload a resume and job, then run a hybrid match
 
 ```bash
-curl -X POST http://localhost:5000/api/match \
-  -F "resume=@sample_resume.pdf" \
-  -F "job_description=@sample_job.docx"
+# Upload a resume
+curl -X POST http://localhost:5000/api/resumes/ \
+  -F "file=@sample_resume.pdf"
+
+# Upload a job
+curl -X POST http://localhost:5000/api/jobs \
+  -F "title=Backend Engineer" \
+  -F "description=@sample_job.docx"
+
+# Hybrid match
+curl -X POST http://localhost:5000/api/jobs/hybrid-match \
+  -H "Content-Type: application/json" \
+  -d '{"resume_id": "YOUR_RESUME_ID"}'
 ```
 
 ### Check rate limiting (should return HTTP 429 after limit)
 
 ```bash
 for i in $(seq 1 70); do
-  curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5000/api/match
+  curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5000/api/jobs/hybrid-match
 done
 ```
 
@@ -289,32 +422,40 @@ Primary evaluation metrics:
 
 | Metric | Method |
 |---|---|
-| Semantic matching quality | Precision@k, Mean Reciprocal Rank (expert-reviewed sample) |
-| Agent workflow reliability | % completed workflows, % schema-valid LLM outputs |
+| Semantic matching quality | Precision@k, Recall, F1, MRR (expert-reviewed sample) |
+| Hybrid ranking improvement | Compare Semantic-only vs. Hybrid vs. Hybrid + Cross-Encoder |
+| Requirement matching accuracy | Per-requirement evidence status reviewed against manual assessment |
+| LLM output reliability | % schema-valid structured outputs, evidence-backed claims |
 | System performance | End-to-end API latency, Redis cache hit ratio |
+| Rate limiting | Correct enforcement under repeated/concurrent requests |
+| Cost efficiency | LLM token/request usage, redundant request reduction |
 | Usability & interpretability | Post-task questionnaire, Likert ratings of clarity/trust |
-
-Supporting metrics: recall/F1, rate-limit accuracy, error rates, LLM token/request usage, cache invalidation behavior.
 
 ---
 
-## 🔁 Request Flow
+## 🔁 Matching Pipeline
 
 ```
-User (React Frontend)
+User (React + TypeScript Frontend)
   ↓
 Flask Backend (validated API endpoints)
   ↓
-Agent Orchestrator
-  (Plan → Tool Calls → Match → LLM Explanation → Verify → Escalate?)
+Document Parser → NLP Preprocessor → Analyzers (Resume / Job)
   ↓
-Semantic Matching Engine (Sentence-BERT)
+Embedding Service (Sentence-BERT, 384-d)
   ↓
-Redis (cache + rate limit)  |  Database (state + results)
+Hybrid Matching Engine
+  ├── Semantic similarity   (35%)
+  ├── BM25 keyword relevance (25%)
+  └── Structured requirement matching (40%)
   ↓
-LLM Integration Service (Claude, provider-abstracted)
+Cross-Encoder Reranking
   ↓
-Verification Module (schemas + deterministic checks)
+Redis (cache + rate limit)  |  PostgreSQL + pgvector (state + results)
+  ↓
+LLM Explanation Service (OpenAI, structured JSON schema)
+  ↓
+Verification Module (schema + deterministic checks)
   ↓
 Results + Explanations + Limitations → Human Review
 ```
@@ -324,16 +465,20 @@ Results + Explanations + Limitations → Human Review
 ## 🧠 Key Concepts Implemented
 
 - Sentence-BERT semantic similarity for resume–job alignment
-- Controlled agentic workflow (planning, tool calling, state, verification)
-- Human-in-the-loop escalation for uncertain/high-impact cases
-- Structured output schemas + deterministic business-rule validation
-- Redis caching strategy (content-hash keys, documented TTLs)
-- Distributed rate limiting to protect the service and control LLM costs
+- BM25 keyword relevance to catch exact terminology and technical keywords
+- Structured requirement-level matching with per-requirement evidence status
+- Weighted hybrid scoring across three complementary signals
+- Cross-Encoder reranking of top candidates for joint relevance evaluation
+- LLM explanation layer with structured, schema-validated JSON output
+- Explainability: evidence, strengths, gaps, uncertainty for every assessment
+- Human-in-the-loop: no final hiring decisions, no automatic applications
+- Redis caching strategy and distributed rate limiting for cost control
 - Prompt injection defenses (untrusted document input, restricted tools)
 - Secure secrets management (environment-based, never hardcoded)
+- PostgreSQL + pgvector for native embedding storage and similarity queries
 - Containerized reproducible environments (Docker + Compose)
 - AWS container hosting (ECS/Fargate) for remote accessibility
-- Responsible AI: no final hiring decisions, no bias-free claims, privacy-first data handling
+- Responsible AI: no bias-free claims, privacy-first data handling
 
 ---
 
@@ -341,6 +486,7 @@ Results + Explanations + Limitations → Human Review
 
 - Semantic matching decoupled from LLM calls for repeatable, low-latency scoring
 - Redis caching reduces repeated embedding and match computation
+- Hybrid scoring is deterministic; the LLM is used only for explanation
 - Rate limiting prevents abuse and runaway LLM costs
 - Graceful degradation when Redis, the database, or the LLM provider is unavailable
 
@@ -353,23 +499,26 @@ Target:
 
 ## 🔮 Future Improvements
 
+- Transferable/related skill detection (e.g., Express.js as evidence for a Node.js requirement)
+- Years-of-experience and education/certification matching
+- Distinguishing mandatory vs. preferred qualifications when wording is ambiguous
+- Partial status for related-but-incomplete evidence
 - Kubernetes deployment (auto-scaling, health checks, config management)
 - Retrieval-augmented generation for richer job-context grounding
-- OpenTelemetry distributed tracing
-- Grafana dashboards for cache/latency/LLM-cost monitoring
+- OpenTelemetry distributed tracing and Grafana dashboards
 - Expanded fairness evaluation across job categories and resume styles
-- Limited demonstration ATS integration (if approved)
 - Persistent agent workflow state for long-running analyses
-- Multi-provider LLM failover (Claude → OpenAI → Gemini)
+- Multi-provider LLM failover (OpenAI → Anthropic → Gemini)
 
 ---
 
 ## 📚 What This Project Demonstrates
 
 - Applied NLP and transformer-based semantic matching
-- Real-world LLM agent design with verification and guardrails
+- Hybrid retrieval and ranking systems (bi-encoder + lexical + structured + cross-encoder)
+- LLM integration with structured outputs and verification
 - Responsible AI practices (explainability, privacy, human oversight)
-- Production-style backend and infrastructure engineering
+- Production-style backend, database, and infrastructure engineering
 - Mixed-methods evaluation linking model quality to system behavior
 - End-to-end delivery: design → implementation → security → cloud deployment
 
@@ -377,6 +526,6 @@ Target:
 
 ## 🏁 Summary
 
-This project delivers a deployable, containerized, AWS-hosted AI recruitment assistant that pairs deterministic semantic matching with a controlled LLM agent — emphasizing transparency, privacy, verification, and human control at every step.
+MatchPilot.ai delivers a deployable, containerized, AWS-hosted AI recruitment assistant that pairs a hybrid matching engine (Sentence-BERT + BM25 + structured requirement matching + Cross-Encoder reranking) with an LLM explanation layer — emphasizing transparency, evidence, privacy, verification, and human control at every step.
 
 Built to assist — designed to be questioned.
