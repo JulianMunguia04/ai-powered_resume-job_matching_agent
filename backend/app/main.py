@@ -11,7 +11,7 @@ from services.database import db
 from routes import api_bp
 
 # Import models so SQLAlchemy registers all three tables.
-from models import Embedding, Resume, Job
+from models import Embedding, Resume, Job, Matching
 
 
 app = Flask(__name__)
