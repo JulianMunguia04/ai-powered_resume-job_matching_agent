@@ -9,6 +9,7 @@ export default function Dashboard() {
   const [jobCount, setJobCount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState(false);
+  const [matchCount, setMatchCount] = useState(null);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -25,6 +26,7 @@ export default function Dashboard() {
       setResumeCount(data.resumes);
       setJobCount(data.jobs);
       setStatsError(false);
+      setMatchCount(data.matches);
 
     } catch (error) {
       console.error("Dashboard statistics error:", error);
@@ -79,7 +81,7 @@ export default function Dashboard() {
 
         <Link href="/matching" className="stat-card">
           <span className="stat-caption">ANALYSIS</span>
-          <h2>0</h2>
+          <h2>{loading ? "..." : statsError ? "—" : matchCount ?? 0}</h2>
           <p>Matches generated</p>
         </Link>
       </section>

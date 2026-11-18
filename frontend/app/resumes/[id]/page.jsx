@@ -1,8 +1,13 @@
-
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import MatchCard from "@/components/MatchCard";
+
+function getMatchScore(match) {
+  const score = Number(match.scores?.hybrid);
+  return Number.isFinite(score) ? score : -1;
+}
 
 function ResumeDetailPageContent() {
   const { id } = useParams();
@@ -11,6 +16,10 @@ function ResumeDetailPageContent() {
   const [resume, setResume] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [matches, setMatches] = useState([]);
+  const [matchesLoading, setMatchesLoading] = useState(true);
+  const [matchesError, setMatchesError] = useState("");
 
   useEffect(() => {
     if (!id) return;
@@ -37,7 +46,30 @@ function ResumeDetailPageContent() {
       }
     }
 
+    async function fetchMatches() {
+      try {
+        const response = await fetch(
+          `/api/matches/resumes/${encodeURIComponent(id)}?limit=5`,
+          { cache: "no-store" }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load matching jobs.");
+        }
+
+        setMatches(data.matches || []);
+      } catch (err) {
+        console.error("Resume matching error:", err);
+        setMatchesError(err.message || "Unable to load matching jobs.");
+      } finally {
+        setMatchesLoading(false);
+      }
+    }
+
     fetchResume();
+    fetchMatches();
   }, [id]);
 
   if (loading) {
@@ -65,6 +97,10 @@ function ResumeDetailPageContent() {
   }
 
   const skills = resume.analysis?.skills || [];
+
+  const sortedMatches = [...matches].sort(
+    (a, b) => getMatchScore(b) - getMatchScore(a)
+  );
 
   return (
     <div className="dashboard-container">
@@ -114,14 +150,10 @@ function ResumeDetailPageContent() {
         <div className="document-skills">
           {skills.length > 0 ? (
             skills.map((skill, index) => {
-              const name =
-                typeof skill === "string" ? skill : skill.name;
+              const name = typeof skill === "string" ? skill : skill.name;
 
               return (
-                <span
-                  className="skill-tag"
-                  key={`${name}-${index}`}
-                >
+                <span className="skill-tag" key={`${name}-${index}`}>
                   {name}
                 </span>
               );
@@ -151,17 +183,44 @@ function ResumeDetailPageContent() {
         <div className="activity-heading">
           <div>
             <h2>Matches</h2>
-            <p>Job opportunities matched to this candidate</p>
+            <p>Top job opportunities matched to this candidate</p>
           </div>
+
+          {!matchesLoading && !matchesError && (
+            <span className="match-results-count">
+              {sortedMatches.length} of 5 matches
+            </span>
+          )}
         </div>
 
-        <div className="empty-state">
-          <h3>No matches yet</h3>
-          <p>
-            Candidate-to-job matching results will appear here once
-            this feature is implemented.
-          </p>
-        </div>
+        {matchesLoading ? (
+          <div className="empty-state">
+            <p>Finding the best matching jobs...</p>
+          </div>
+        ) : matchesError ? (
+          <div className="empty-state">
+            <h3>Unable to load matches</h3>
+            <p>{matchesError}</p>
+          </div>
+        ) : sortedMatches.length > 0 ? (
+          <div className="match-results-list">
+            {sortedMatches.slice(0, 5).map((match) => (
+              <MatchCard
+                key={match.id || match.job?.id}
+                match={match}
+                type="resume"
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <h3>No matches found</h3>
+            <p>
+              No matching job opportunities are currently available for this
+              candidate.
+            </p>
+          </div>
+        )}
       </section>
     </div>
   );

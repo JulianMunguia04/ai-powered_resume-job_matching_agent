@@ -1,33 +1,36 @@
-
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import MatchCard from "@/components/MatchCard";
+
+function getMatchScore(match) {
+  const score = Number(match.scores?.hybrid);
+  return Number.isFinite(score) ? score : -1;
+}
 
 function JobDetailPageContent() {
   const { id } = useParams();
   const router = useRouter();
-
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [matches, setMatches] = useState([]);
+  const [matchesLoading, setMatchesLoading] = useState(true);
+  const [matchesError, setMatchesError] = useState("");
 
   useEffect(() => {
     if (!id) return;
 
     async function fetchJob() {
       try {
-        const response = await fetch(
-          `/api/jobs/${encodeURIComponent(id)}`,
-          { cache: "no-store" }
-        );
-
+        const response = await fetch(`/api/jobs/${encodeURIComponent(id)}`, {
+          cache: "no-store",
+        });
         const data = await response.json();
-
         if (!response.ok) {
           throw new Error(data.error || "Failed to load job.");
         }
-
         setJob(data.job);
       } catch (err) {
         console.error("Job detail error:", err);
@@ -37,7 +40,27 @@ function JobDetailPageContent() {
       }
     }
 
+    async function fetchMatches() {
+      try {
+        const response = await fetch(
+          `/api/matches/jobs/${encodeURIComponent(id)}?limit=5`,
+          { cache: "no-store" }
+        );
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load matching candidates.");
+        }
+        setMatches(data.matches || []);
+      } catch (err) {
+        console.error("Job matching error:", err);
+        setMatchesError(err.message || "Unable to load matching candidates.");
+      } finally {
+        setMatchesLoading(false);
+      }
+    }
+
     fetchJob();
+    fetchMatches();
   }, [id]);
 
   if (loading) {
@@ -66,6 +89,10 @@ function JobDetailPageContent() {
 
   const skills = job.analysis?.skills || [];
 
+  const sortedMatches = [...matches].sort(
+    (a, b) => getMatchScore(b) - getMatchScore(a)
+  );
+
   return (
     <div className="dashboard-container">
       <section className="welcome-section">
@@ -85,7 +112,6 @@ function JobDetailPageContent() {
             <p>Stored job description and analysis details</p>
           </div>
         </div>
-
         <div className="stat-card">
           <span className="stat-caption">JOB TITLE</span>
           <h2>{job.title}</h2>
@@ -110,23 +136,16 @@ function JobDetailPageContent() {
             <p>{skills.length} skills identified in this job description</p>
           </div>
         </div>
-
         {skills.length > 0 ? (
           <div className="job-skills-list">
             {skills.map((skill, index) => {
-              const name =
-                typeof skill === "string" ? skill : skill.name;
-
+              const name = typeof skill === "string" ? skill : skill.name;
               const requirementType =
                 typeof skill === "object"
                   ? skill.requirement_type || "mentioned"
                   : "mentioned";
-
               return (
-                <div
-                  className="job-skill-item"
-                  key={`${name}-${index}`}
-                >
+                <div className="job-skill-item" key={`${name}-${index}`}>
                   <span className="skill-tag">{name}</span>
                   <span className="skill-requirement">
                     {requirementType.replaceAll("_", " ")}
@@ -147,7 +166,6 @@ function JobDetailPageContent() {
             <p>Complete extracted job description text</p>
           </div>
         </div>
-
         <div className="stat-card">
           <div className="resume-raw-text">
             {job.description || "No job description available."}
@@ -159,17 +177,42 @@ function JobDetailPageContent() {
         <div className="activity-heading">
           <div>
             <h2>Matches</h2>
-            <p>Candidates matched to this position</p>
+            <p>Top matching candidates for this position</p>
           </div>
+          {!matchesLoading && !matchesError && (
+            <span className="match-results-count">
+              {sortedMatches.length} of 5 matches
+            </span>
+          )}
         </div>
 
-        <div className="empty-state">
-          <h3>No matches yet</h3>
-          <p>
-            Candidate matching results will appear here once
-            this feature is implemented.
-          </p>
-        </div>
+        {matchesLoading ? (
+          <div className="empty-state">
+            <p>Finding the best matching candidates...</p>
+          </div>
+        ) : matchesError ? (
+          <div className="empty-state">
+            <h3>Unable to load matches</h3>
+            <p>{matchesError}</p>
+          </div>
+        ) : sortedMatches.length > 0 ? (
+          <div className="match-results-list">
+            {sortedMatches.slice(0, 5).map((match) => (
+              <MatchCard
+                key={match.id || match.applicant?.id}
+                match={match}
+                type="job"
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <h3>No matches found</h3>
+            <p>
+              No matching candidates are currently available for this position.
+            </p>
+          </div>
+        )}
       </section>
     </div>
   );
