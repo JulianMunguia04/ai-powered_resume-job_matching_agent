@@ -4,13 +4,15 @@ import os
 from dotenv import load_dotenv
 from flask import Flask, jsonify
 from sqlalchemy import URL, text
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 load_dotenv()
 
 from services.database import db
 from routes import api_bp
 
-# Import models so SQLAlchemy registers all three tables.
+# Import models so SQLAlchemy registers all four tables.
 from models import Embedding, Resume, Job, Matching
 
 
@@ -30,8 +32,25 @@ database_url = URL.create(
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
+# Redis configuration.
+redis_url = os.getenv("REDIS_URL")
+
+if not redis_url:
+    raise RuntimeError("REDIS_URL is not configured.")
+
+# Initialize database.
 db.init_app(app)
 
+# Initialize Redis-backed rate limiter.
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    default_limits=["60 per minute"],
+    storage_uri=redis_url,
+    headers_enabled=True,
+)
+
+# Register API routes.
 app.register_blueprint(api_bp, url_prefix="/api")
 
 
@@ -70,6 +89,14 @@ def database_health():
         }), 500
 
 
+@app.errorhandler(429)
+def ratelimit_handler(error):
+    return jsonify({
+        "error": "Too many requests.",
+        "message": "You have exceeded the API rate limit. Please try again shortly."
+    }), 429
+
+
 if __name__ == "__main__":
     with app.app_context():
         # Enable pgvector in PostgreSQL.
@@ -87,4 +114,5 @@ if __name__ == "__main__":
         debug=True
     )
 
-# from root python backend/app/main.py
+# Run from project root:
+# python backend/app/main.py
