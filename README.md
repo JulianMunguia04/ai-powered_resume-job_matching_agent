@@ -55,7 +55,7 @@ MatchPilot.ai is organized as a Next.js (React + TypeScript) frontend backed by 
 | Upload Resume | ![Upload Resume](README-Photos/upload-resume.png) |
 | Upload Job | ![Upload Job](README-Photos/upload-job.png) |
 | Browse Jobs | ![Browse Jobs](README-Photos/browse-jobs.png) |
-| Match Analysis | ![Match Analysis](READMEe-Photos/match-analysis.png) |
+| Match Analysis | ![Match Analysis](README-Photos/match-analysis.png) |
 | Match Analysis (detail) | ![Match Analysis 2](README-Photos/match-analysis-2.png) |
 
 ---
