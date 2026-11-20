@@ -1,7 +1,9 @@
+
 import { NextResponse } from "next/server";
 import mammoth from "mammoth";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 const require = createRequire(
   path.join(process.cwd(), "package.json")
@@ -9,10 +11,47 @@ const require = createRequire(
 
 const pdfParse = require("pdf-parse");
 
-process.loadEnvFile('../.env');
-
 export async function POST(request) {
   try {
+    // Limit uploads to 5 requests per IP per minute.
+    const rateLimit = await checkRateLimit(request, {
+      limit: 5,
+      windowMs: 60 * 1000,
+      prefix: "upload",
+    });
+
+    if (rateLimit.unavailable) {
+      return NextResponse.json(
+        {
+          error: "Upload service temporarily unavailable.",
+          message: "The rate limiter could not connect to Redis.",
+        },
+        {
+          status: 503,
+          headers: {
+            "Retry-After": String(rateLimit.retryAfter),
+          },
+        }
+      );
+    }
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: "Too many uploads.",
+          message: "You can upload up to 5 documents per minute. Please try again shortly.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(rateLimit.retryAfter),
+            "X-RateLimit-Limit": String(rateLimit.limit),
+            "X-RateLimit-Remaining": "0",
+          },
+        }
+      );
+    }
+
     const formData = await request.formData();
 
     const type = formData.get("type");
@@ -81,6 +120,7 @@ export async function POST(request) {
 
     if (type === "resume") {
       endpoint = "/api/resumes/";
+
       if (!candidateName || !candidateName.trim()) {
         return NextResponse.json(
           { error: "A candidate name is required." },
@@ -101,6 +141,7 @@ export async function POST(request) {
       }
 
       endpoint = "/api/jobs/";
+
       payload = {
         title: title.trim(),
         description: extractedText,
@@ -138,17 +179,34 @@ export async function POST(request) {
             "The backend rejected the document.",
           backend: backendData,
         },
-        { status: backendResponse.status }
+        {
+          status: backendResponse.status,
+          headers:
+            backendResponse.status === 429
+              ? {
+                  "Retry-After":
+                    backendResponse.headers.get("Retry-After") || "60",
+                }
+              : {},
+        }
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      type,
-      filename: file.name,
-      extractedCharacters: extractedText.length,
-      document: backendData,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        type,
+        filename: file.name,
+        extractedCharacters: extractedText.length,
+        document: backendData,
+      },
+      {
+        headers: {
+          "X-RateLimit-Limit": String(rateLimit.limit),
+          "X-RateLimit-Remaining": String(rateLimit.remaining),
+        },
+      }
+    );
   } catch (error) {
     console.error("Document upload error:", error);
 
