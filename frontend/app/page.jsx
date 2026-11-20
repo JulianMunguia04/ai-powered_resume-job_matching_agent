@@ -4,17 +4,23 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
+import {
+  getRecentActivity,
+  ACTIVITY_EVENT,
+} from "@/lib/recentActivity";
+
 export default function Dashboard() {
   const [resumeCount, setResumeCount] = useState(null);
   const [jobCount, setJobCount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState(false);
   const [matchCount, setMatchCount] = useState(null);
+  const [recentActivity, setRecentActivity] = useState([]);
 
   const fetchStats = useCallback(async () => {
     try {
       const response = await fetch("/api/stats", {
-        cache: "no-store"
+        cache: "no-store",
       });
 
       const data = await response.json();
@@ -37,17 +43,22 @@ export default function Dashboard() {
     }
   }, []);
 
-  useEffect(() => {
-    // Load counts when the dashboard opens.
-    fetchStats();
+  const refreshRecentActivity = useCallback(() => {
+    setRecentActivity(getRecentActivity());
+  }, []);
 
-    // Refresh counts after a successful document upload.
+  useEffect(() => {
+    fetchStats();
+    refreshRecentActivity();
+
     window.addEventListener("workspace-data-updated", fetchStats);
+    window.addEventListener(ACTIVITY_EVENT, refreshRecentActivity);
 
     return () => {
       window.removeEventListener("workspace-data-updated", fetchStats);
+      window.removeEventListener(ACTIVITY_EVENT, refreshRecentActivity);
     };
-  }, [fetchStats]);
+  }, [fetchStats, refreshRecentActivity]);
 
   return (
     <div className="dashboard-container">
@@ -81,7 +92,9 @@ export default function Dashboard() {
 
         <Link href="/matching" className="stat-card">
           <span className="stat-caption">ANALYSIS</span>
-          <h2>{loading ? "..." : statsError ? "—" : matchCount ?? 0}</h2>
+          <h2>
+            {loading ? "..." : statsError ? "—" : matchCount ?? 0}
+          </h2>
           <p>Matches generated</p>
         </Link>
       </section>
@@ -123,11 +136,65 @@ export default function Dashboard() {
       </section>
 
       <section className="activity-section">
-        <h2>Recent activity</h2>
-        <div className="empty-state">
-          <h3>No activity yet</h3>
-          <p>Your uploaded documents and matching results will appear here.</p>
+        <div className="recent-activity-header">
+          <div>
+            <h2>Recent activity</h2>
+            <p>Your latest uploaded resumes and job descriptions.</p>
+          </div>
         </div>
+
+        {recentActivity.length === 0 ? (
+          <div className="empty-state">
+            <h3>No recent activity</h3>
+            <p>
+              Newly uploaded resumes and job descriptions will
+              appear here for five minutes.
+            </p>
+          </div>
+        ) : (
+          <div className="recent-activity-grid">
+            {recentActivity.map((activity) => {
+              const isResume = activity.type === "resume";
+
+              return (
+                <Link
+                  key={`${activity.type}-${activity.id}`}
+                  href={`/${isResume ? "resumes" : "jobs"}/${encodeURIComponent(activity.id)}`}
+                  className="recent-activity-card"
+                >
+                  <div
+                    className={`recent-activity-icon ${
+                      isResume ? "resume" : "job"
+                    }`}
+                  >
+                    {isResume ? "▤" : "▣"}
+                  </div>
+
+                  <div className="recent-activity-content">
+                    <span className="recent-activity-type">
+                      {isResume ? "RESUME UPLOADED" : "JOB ADDED"}
+                    </span>
+
+                    <h3>{activity.title}</h3>
+
+                    <p>
+                      {new Date(activity.createdAt).toLocaleTimeString(
+                        undefined,
+                        {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        }
+                      )}
+                      {" · "}Expires after 5 minutes
+                    </p>
+                  </div>
+
+                  <span className="recent-activity-arrow">→</span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </section>
     </div>
   );

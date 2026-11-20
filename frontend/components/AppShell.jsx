@@ -4,6 +4,7 @@
 import { Suspense, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { recordRecentActivity } from "@/lib/recentActivity";
 
 const navigation = [
   { label: "Dashboard", href: "/", icon: "▦" },
@@ -75,11 +76,10 @@ function AppShellContent({ children }) {
     try {
       const formData = new FormData();
 
-      formData.append(
-        "type",
-        uploadType === "Resume" ? "resume" : "job"
-      );
+      const activityType =
+        uploadType === "Resume" ? "resume" : "job";
 
+      formData.append("type", activityType);
       formData.append("file", selectedFile);
 
       if (uploadType === "Job Description") {
@@ -114,10 +114,50 @@ function AppShellContent({ children }) {
         throw new Error(data.error || "Upload failed.");
       }
 
+      // Find the uploaded record, whether returned directly
+      // or nested inside a resume/job property.
+      const uploadedRecord =
+        data.document?.[activityType] ||
+        data[activityType] ||
+        data;
+
+      const uploadedId =
+        uploadedRecord.id ||
+        uploadedRecord.resume_id ||
+        uploadedRecord.job_id ||
+        data.id ||
+        data.resume_id ||
+        data.job_id;
+
+      // Record the activity only after a successful upload.
+      if (uploadedId) {
+        recordRecentActivity({
+          type: activityType,
+          id: uploadedId,
+          title:
+            activityType === "resume"
+              ? uploadedRecord.candidate_name ||
+                uploadedRecord.candidateName ||
+                candidateName.trim() ||
+                uploadedRecord.filename ||
+                selectedFile.name
+              : uploadedRecord.title ||
+                uploadTitle.trim() ||
+                uploadedRecord.filename ||
+                selectedFile.name,
+        });
+      } else {
+        console.warn(
+          "Upload succeeded, but no record ID was returned. Recent activity was not recorded.",
+          data
+        );
+      }
+
+      // Refresh dashboard statistics.
       window.dispatchEvent(new Event("workspace-data-updated"));
 
       setUploadNotice(
-        `${data.filename} was successfully uploaded and analyzed.`
+        `${data.filename || selectedFile.name} was successfully uploaded and analyzed.`
       );
 
       setUploadType(null);
@@ -125,7 +165,6 @@ function AppShellContent({ children }) {
       setUploadTitle("");
       setCandidateName("");
       setUploadError("");
-
     } catch (error) {
       console.error("Upload error:", error);
       setUploadError(error.message);
@@ -295,7 +334,9 @@ function AppShellContent({ children }) {
                   type="text"
                   placeholder="e.g. Jane Smith"
                   value={candidateName}
-                  onChange={(event) => setCandidateName(event.target.value)}
+                  onChange={(event) =>
+                    setCandidateName(event.target.value)
+                  }
                 />
               </div>
             )}
@@ -318,7 +359,9 @@ function AppShellContent({ children }) {
               type="file"
               accept=".pdf,.docx,.txt"
               hidden
-              onChange={(event) => handleFile(event.target.files?.[0])}
+              onChange={(event) =>
+                handleFile(event.target.files?.[0])
+              }
             />
 
             <div
@@ -370,9 +413,7 @@ function AppShellContent({ children }) {
             </div>
 
             {uploadError && (
-              <div className="upload-error">
-                {uploadError}
-              </div>
+              <div className="upload-error">{uploadError}</div>
             )}
 
             <div className="modal-actions">
