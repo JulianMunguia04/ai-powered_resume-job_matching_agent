@@ -3,6 +3,8 @@ import json
 
 from rank_bm25 import BM25Okapi
 
+from sqlalchemy.exc import IntegrityError
+
 from services.database import db
 from models import Resume, Job, Matching
 
@@ -154,10 +156,11 @@ def get_or_generate_matching(
     ).first()
 
     cache_is_valid = (
-        existing is not None
-        and existing.resume_updated_at == resume_record.updated_at
-        and existing.job_updated_at == job_record.updated_at
-    )
+      existing is not None
+      and existing.resume_updated_at == resume_record.updated_at
+      and existing.job_updated_at == job_record.updated_at
+      and existing.analysis.get("matching_version") == MATCHING_VERSION
+  )
 
     if cache_is_valid:
         return {
@@ -207,6 +210,33 @@ def get_or_generate_matching(
 
         db.session.add(existing)
 
+        try:
+            db.session.commit()
+            db.session.refresh(existing)
+
+        except IntegrityError:
+            db.session.rollback()
+
+            # Another request may have saved this same match
+            # while this request was generating its explanation.
+            existing = Matching.query.filter_by(
+                resume_id=resume_record.id,
+                job_id=job_record.id,
+            ).first()
+
+            if existing is None:
+                # The error was caused by another constraint.
+                raise
+
+            return {
+                "id": str(existing.id),
+                "text": existing.text,
+                "analysis": existing.analysis,
+                "scores": existing.scores,
+                "cached": True,
+                "created_at": existing.created_at.isoformat(),
+            }
+
     else:
         existing.text = explanation_text
         existing.analysis = analysis
@@ -214,8 +244,8 @@ def get_or_generate_matching(
         existing.resume_updated_at = resume_record.updated_at
         existing.job_updated_at = job_record.updated_at
 
-    db.session.commit()
-    db.session.refresh(existing)
+        db.session.commit()
+        db.session.refresh(existing)
 
     return {
         "id": str(existing.id),

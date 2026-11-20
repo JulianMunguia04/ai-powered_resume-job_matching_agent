@@ -1,7 +1,7 @@
 
 from uuid import UUID
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 
 from services.database import db
 from services.matching_service import (
@@ -64,6 +64,12 @@ def get_matches():
         }), 200
 
     except Exception as error:
+        db.session.rollback()
+
+        current_app.logger.exception(
+            "Failed to retrieve saved matches"
+        )
+
         return jsonify({
             "error": "Failed to retrieve matches.",
             "details": str(error),
@@ -110,6 +116,11 @@ def get_jobs_for_resume(resume_id):
 
     except Exception as error:
         db.session.rollback()
+
+        current_app.logger.exception(
+            "Failed to find matching jobs for resume %s",
+            parsed_id
+        )
 
         return jsonify({
             "error": "Failed to find matching jobs.",
@@ -158,6 +169,11 @@ def get_applicants_for_job(job_id):
     except Exception as error:
         db.session.rollback()
 
+        current_app.logger.exception(
+            "Failed to find matching applicants for job %s",
+            parsed_id
+        )
+
         return jsonify({
             "error": "Failed to find matching applicants.",
             "details": str(error),
@@ -181,23 +197,37 @@ def get_matching(matching_id):
             "error": "Invalid matching ID."
         }), 400
 
-    matching = db.session.get(Matching, parsed_id)
+    try:
+        matching = db.session.get(Matching, parsed_id)
 
-    if matching is None:
+        if matching is None:
+            return jsonify({
+                "error": "Matching not found."
+            }), 404
+
         return jsonify({
-            "error": "Matching not found."
-        }), 404
+            "success": True,
+            "matching": {
+                "id": str(matching.id),
+                "resume_id": str(matching.resume_id),
+                "job_id": str(matching.job_id),
+                "text": matching.text,
+                "analysis": matching.analysis,
+                "scores": matching.scores,
+                "created_at": matching.created_at.isoformat(),
+                "updated_at": matching.updated_at.isoformat(),
+            },
+        }), 200
 
-    return jsonify({
-        "success": True,
-        "matching": {
-            "id": str(matching.id),
-            "resume_id": str(matching.resume_id),
-            "job_id": str(matching.job_id),
-            "text": matching.text,
-            "analysis": matching.analysis,
-            "scores": matching.scores,
-            "created_at": matching.created_at.isoformat(),
-            "updated_at": matching.updated_at.isoformat(),
-        },
-    }), 200
+    except Exception as error:
+        db.session.rollback()
+
+        current_app.logger.exception(
+            "Failed to retrieve matching record %s",
+            parsed_id
+        )
+
+        return jsonify({
+            "error": "Failed to retrieve matching record.",
+            "details": str(error),
+        }), 500
